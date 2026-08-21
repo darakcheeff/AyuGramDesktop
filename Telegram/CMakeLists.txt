@@ -246,6 +246,8 @@ set(ayugram_files
         ayu/data/entities.h
         ayu/data/ayu_database.cpp
         ayu/data/ayu_database.h
+        ayu/utils/smart_search.cpp
+        ayu/utils/smart_search.h
 
         info/profile/info_profile_music_button.cpp
         info/profile/info_profile_music_button.h

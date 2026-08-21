@@ -633,8 +633,8 @@ private:
 	rpl::variable<bool> _hideFromBlocked = false;
 	rpl::variable<bool> _semiTransparentDeletedMessages = false;
 	rpl::variable<bool> _disableAds = true;
-	rpl::variable<bool> _disableStories = false;
-	rpl::variable<bool> _disableCustomBackgrounds = false;
+	rpl::variable<bool> _disableStories = true;
+	rpl::variable<bool> _disableCustomBackgrounds = true;
 	rpl::variable<bool> _showOnlyAddedEmojisAndStickers = false;
 	rpl::variable<bool> _collapseSimilarChannels = true;
 	rpl::variable<bool> _hideSimilarChannels = false;
@@ -670,8 +670,8 @@ private:
 	rpl::variable<bool> _showEmojiButtonInMessageField = true;
 	rpl::variable<bool> _showMicrophoneButtonInMessageField = true;
 	rpl::variable<bool> _showAutoDeleteButtonInMessageField = true;
-	rpl::variable<bool> _showGiftButtonInMessageField = true;
-	rpl::variable<bool> _showAiEditorButtonInMessageField = true;
+	rpl::variable<bool> _showGiftButtonInMessageField = false;
+	rpl::variable<bool> _showAiEditorButtonInMessageField = false;
 	rpl::variable<bool> _showAttachPopup = true;
 	rpl::variable<bool> _showEmojiPopup = true;
 	rpl::variable<bool> _showMyProfileInDrawer = true;
@@ -682,11 +682,11 @@ private:
 	rpl::variable<bool> _showCallsInDrawer = true;
 	rpl::variable<bool> _showSavedMessagesInDrawer = true;
 	rpl::variable<bool> _showLReadToggleInDrawer = false;
-	rpl::variable<bool> _showSReadToggleInDrawer = true;
+	rpl::variable<bool> _showSReadToggleInDrawer = false;
 	rpl::variable<bool> _showNightModeToggleInDrawer = true;
-	rpl::variable<bool> _showGhostToggleInDrawer = true;
+	rpl::variable<bool> _showGhostToggleInDrawer = false;
 	rpl::variable<bool> _showStreamerToggleInDrawer = false;
-	rpl::variable<bool> _showGhostToggleInTray = true;
+	rpl::variable<bool> _showGhostToggleInTray = false;
 	rpl::variable<bool> _showStreamerToggleInTray = false;
 	rpl::variable<bool> _hidePremiumStatuses = false;
 	rpl::variable<QString> _monoFont;
@@ -705,14 +705,14 @@ private:
 	rpl::variable<bool> _voiceConfirmation = false;
 	rpl::variable<bool> _roundConfirmation = false;
 	rpl::variable<TranslationProvider> _translationProvider = TranslationProvider::Telegram;
-	rpl::variable<bool> _adaptiveCoverColor = true;
+	rpl::variable<bool> _adaptiveCoverColor = false;
 	rpl::variable<bool> _improveLinkPreviews = false;
-	rpl::variable<bool> _crashReporting = true;
+	rpl::variable<bool> _crashReporting = false;
 	rpl::variable<int> _avatarCorners = 23;
 	rpl::variable<bool> _singleCornerRadius = false;
 	rpl::variable<bool> _streamerMode = false;
 
-	rpl::variable<bool> _useGlobalGhostMode = true;
+	rpl::variable<bool> _useGlobalGhostMode = false;
 	std::map<uint64, std::unique_ptr<GhostModeAccountSettings>> _ghostAccounts;
 
 	MessageShotSettings _messageShotSettings;

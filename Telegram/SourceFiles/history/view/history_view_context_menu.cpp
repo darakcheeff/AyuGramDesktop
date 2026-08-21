@@ -721,18 +721,14 @@ bool AddViewRepliesAction(
 		? item->topicRootId()
 		: 0;
 	const auto repliesCount = item->repliesCount();
-	const auto withReplies = (repliesCount > 0);
-	if (!withReplies || !item->history()->peer->isMegagroup()) {
-		if (!topicRootId) {
-			return false;
-		}
-	}
+	const auto hasReplyTo = (item->replyToId() != 0);
+
 	const auto rootId = topicRootId
 		? topicRootId
-		: repliesCount
+		: (repliesCount > 0)
 		? item->id
-		: item->replyToTop();
-	const auto highlightId = topicRootId ? item->id : 0;
+		: (hasReplyTo ? item->replyToTop() : item->id);
+	const auto highlightId = (topicRootId || !repliesCount) ? item->id : 0;
 	const auto phrase = topicRootId
 		? tr::lng_replies_view_topic(tr::now)
 		: (repliesCount > 0)

@@ -1,0 +1,84 @@
+name: Build Custom AyuGram (Linux x86_64)
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build Standalone Linux Binary
+    runs-on: ubuntu-latest
+    steps:
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Pull build container
+        run: |
+          docker pull ghcr.io/telegramdesktop/tdesktop/centos_env:latest
+
+      - name: Build AyuGram Binary
+        run: |
+          docker run --rm \
+            -u $(id -u) \
+            -v "$GITHUB_WORKSPACE:/usr/src/tdesktop" \
+            ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
+            /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+            -D TDESKTOP_API_ID=2040 \
+            -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627 \
+            -D TDESKTOP_DISABLE_AUTOUPDATE=ON
+
+      - name: Strip & Package Binary
+        run: |
+          cd out/Release
+          strip -s Telegram || true
+          mv Telegram AyuGram
+          tar -cJf AyuGram-Linux-Custom.tar.xz AyuGram
+          ls -lh AyuGram-Linux-Custom.tar.xz
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AyuGram-Linux-Custom
+          path: out/Release/AyuGram-Linux-Custom.tar.xz
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: custom-linux-v7.0.9
+          name: Custom AyuGram Linux Release
+          body: |
+            ### Custom AyuGram Build for Linux (Mint / Ubuntu)
+            - **Base**: AyuGram v7.0.9 (Latest MTProto layer support)
+            - **Features**:
+              - Tree/replies navigation for all chats
+              - RegEx and morphology (RU/EN) stemming search
+              - System default browser enforced (no embedded webview)
+              - Stories completely disabled
+              - Gifts, TON/Crypto, Stars completely disabled
+              - UI customizations stripped (clean native look)
+              - Ghost mode removed (clean standard client)
+              - Remote pings & telemetry (RCManager, dpaste, iTunes, Sentry) completely neutralized
+            - **Artifact**: `AyuGram-Linux-Custom.tar.xz` (Standalone portable binary)
+          files: out/Release/AyuGram-Linux-Custom.tar.xz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
