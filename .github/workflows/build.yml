@@ -30,6 +30,10 @@ jobs:
           submodules: recursive
           fetch-depth: 1
 
+      - name: Patch Submodules Discovery
+        run: |
+          sed -i 's/find_package(protobuf REQUIRED CONFIG)/find_package(Protobuf REQUIRED)/g' cmake/external/cld3/CMakeLists.txt || true
+
       - name: Pull build container
         run: |
           docker pull ghcr.io/telegramdesktop/tdesktop/centos_env:latest
