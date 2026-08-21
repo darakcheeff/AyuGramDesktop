@@ -4398,6 +4398,10 @@ void InnerWidget::refreshFilterResults() {
 			append(_openedForum->topicsList()->indexed());
 		} else if (_openedFolder) {
 			append(_openedFolder->chatsList()->indexed());
+		} else if (_filterId > 0) {
+			if (const auto list = session().data().chatsFilters().chatsList(_filterId)) {
+				append(list->indexed());
+			}
 		} else {
 			const auto owner = &session().data();
 			append(owner->chatsList()->indexed());
@@ -4781,6 +4785,9 @@ void InnerWidget::searchReceived(
 	for (const auto &item : messages) {
 		const auto history = item->history();
 		if (_openedFolder && history->folder() != _openedFolder) {
+			continue;
+		}
+		if (_filterId > 0 && !history->inChatList(_filterId)) {
 			continue;
 		}
 		if (SmartSearch::IsRegexQuery(_searchState.query)) {

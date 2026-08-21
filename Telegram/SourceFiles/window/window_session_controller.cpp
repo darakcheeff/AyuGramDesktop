@@ -1243,12 +1243,18 @@ void SessionNavigation::showRepliesForMessage(
 			return;
 		}
 	}
+	if (!history->peer->isBroadcast()) {
+		using namespace HistoryView;
+		auto memento = std::make_shared<ChatMemento>(ChatViewId{
+			.history = history,
+			.repliesRootId = rootId,
+		}, commentId, params.highlight);
+		showSection(std::move(memento), params);
+		return;
+	}
 	if (_showingRepliesRequestId
 		&& _showingRepliesHistory == history.get()
 		&& _showingRepliesRootId == rootId) {
-		return;
-	} else if (!history->peer->asChannel()) {
-		// HistoryView::ChatWidget replies right now handles only channels.
 		return;
 	}
 	_api.request(base::take(_showingRepliesRequestId)).cancel();

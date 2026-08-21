@@ -34,7 +34,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /home/runner/.cache/ccache
-          key: ccache-linux-${{ github.sha }}
+          key: ccache-linux-${{ github.run_id }}
           restore-keys: |
             ccache-linux-
 
@@ -69,7 +69,9 @@ jobs:
             -v "$GITHUB_WORKSPACE:/usr/src/tdesktop" \
             -v "/home/runner/.cache/ccache:/.cache/ccache" \
             -e CCACHE_DIR=/.cache/ccache \
-            -e CCACHE_MAXSIZE=2G \
+            -e CCACHE_BASEDIR=/usr/src/tdesktop \
+            -e CCACHE_NOHASHDIR=1 \
+            -e CCACHE_MAXSIZE=5G \
             ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
             /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
             -D TDESKTOP_API_ID=2040 \
