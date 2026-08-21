@@ -68,8 +68,7 @@ jobs:
       - name: Strip & Package Binary
         run: |
           cd out/Release
-          strip -s Telegram || true
-          mv Telegram AyuGram
+          strip -s AyuGram || true
           tar -cJf AyuGram-Linux-Custom.tar.xz AyuGram
           ls -lh AyuGram-Linux-Custom.tar.xz
 
