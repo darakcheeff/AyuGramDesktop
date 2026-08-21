@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "dialogs/dialogs_inner_widget.h"
 
+#include "ayu/utils/smart_search.h"
 #include "dialogs/dialogs_three_state_icon.h"
 #include "dialogs/ui/chat_search_empty.h"
 #include "dialogs/ui/chat_search_in.h"
@@ -4395,6 +4396,8 @@ void InnerWidget::refreshFilterResults() {
 			append(_savedSublists->chatsList()->indexed());
 		} else if (_openedForum) {
 			append(_openedForum->topicsList()->indexed());
+		} else if (_openedFolder) {
+			append(_openedFolder->chatsList()->indexed());
 		} else {
 			const auto owner = &session().data();
 			append(owner->chatsList()->indexed());
@@ -4777,6 +4780,14 @@ void InnerWidget::searchReceived(
 	auto &results = toPreview ? _previewResults : _searchResults;
 	for (const auto &item : messages) {
 		const auto history = item->history();
+		if (_openedFolder && history->folder() != _openedFolder) {
+			continue;
+		}
+		if (SmartSearch::IsRegexQuery(_searchState.query)) {
+			if (!SmartSearch::Matches(item->originalText().text, _searchState.query)) {
+				continue;
+			}
+		}
 		if (toPreview || !uniquePeers || !hasHistoryInResults(history)) {
 			const auto index = int(results.size());
 			const auto repaint = toPreview

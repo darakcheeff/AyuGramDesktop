@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "dialogs/dialogs_widget.h"
 
+#include "ayu/utils/smart_search.h"
 #include "base/call_delayed.h"
 #include "base/qt/qt_key_modifiers.h"
 #include "base/options.h"
@@ -3597,12 +3598,14 @@ void Widget::requestMessages(bool fromStart) {
 		: _openedFolder
 		? _openedFolder->id()
 		: 0;
+	const auto isRegex = SmartSearch::IsRegexQuery(_searchQuery);
+	const auto serverQuery = isRegex ? QString() : _searchQuery;
 	_searchProcess.requestId = session().api().request(
 		MTPmessages_SearchGlobal(
 			MTP_flags(flags),
 			MTP_int(folderId),
 			(community ? community->inputChannel() : MTPInputChannel()),
-			MTP_string(_searchQuery),
+			MTP_string(serverQuery),
 			MTP_inputMessagesFilterEmpty(),
 			MTP_int(0), // min_date
 			MTP_int(0), // max_date

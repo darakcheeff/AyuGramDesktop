@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_histories.h"
 #include "history/history.h"
 #include "history/history_item.h"
+#include "ayu/utils/smart_search.h"
 #include "apiwrap.h"
 
 namespace Api {
@@ -175,7 +176,7 @@ std::optional<SearchRequest> PrepareSearchRequest(
 		MTP_flags((topicRootId ? Flag::f_top_msg_id : Flag(0))
 			| (monoforumPeerId ? Flag::f_saved_peer_id : Flag(0))),
 		peer->input(),
-		MTP_string(query),
+		MTP_string(SmartSearch::IsRegexQuery(query) ? QString() : query),
 		MTP_inputPeerEmpty(),
 		(monoforumPeerId
 			? peer->owner().peer(monoforumPeerId)->input()
@@ -261,7 +262,9 @@ SearchResult ParseSearchResult(
 			const auto itemId = item->id;
 			if ((type == Storage::SharedMediaType::kCount)
 				|| item->sharedMediaTypes().test(type)) {
-				result.messageIds.push_back(itemId);
+				if (!SmartSearch::IsRegexQuery(query) || SmartSearch::Matches(item->originalText().text, query)) {
+					result.messageIds.push_back(itemId);
+				}
 			}
 			accumulate_min(result.noSkipRange.from, itemId);
 			accumulate_max(result.noSkipRange.till, itemId);
