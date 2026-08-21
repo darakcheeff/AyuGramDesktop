@@ -30,12 +30,24 @@ jobs:
           submodules: recursive
           fetch-depth: 1
 
-      - name: Patch Unused CLD3 Stub
+      - name: Patch Unused CLD3 Dependencies
         run: |
           cat << 'STUB_EOF' > cmake/external/cld3/CMakeLists.txt
           add_library(external_cld3 INTERFACE IMPORTED GLOBAL)
           add_library(desktop-app::external_cld3 ALIAS external_cld3)
           STUB_EOF
+
+          cat << 'SPELL_EOF' > Telegram/lib_spellcheck/spellcheck/third_party/language_cld3.cpp
+          #include "spellcheck/third_party/language_cld3.h"
+
+          namespace Platform::Language {
+
+          LanguageId Recognize(QStringView text) {
+              return {};
+          }
+
+          } // namespace Platform::Language
+          SPELL_EOF
 
       - name: Pull build container
         run: |
