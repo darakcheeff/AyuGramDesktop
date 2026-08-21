@@ -3045,14 +3045,14 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 		const auto topicRootId = item->history()->isForum()
 			? item->topicRootId()
 			: 0;
-		if (topicRootId
-			|| (withReplies && item->history()->peer->isMegagroup())) {
-			const auto highlightId = topicRootId ? item->id : 0;
+		const auto hasReplyTo = (item->replyToId() != 0);
+		if (topicRootId || withReplies || hasReplyTo) {
+			const auto highlightId = (topicRootId || !repliesCount) ? item->id : 0;
 			const auto rootId = topicRootId
 				? topicRootId
-				: repliesCount
+				: (repliesCount > 0)
 				? item->id
-				: item->replyToTop();
+				: (hasReplyTo ? item->replyToTop() : item->id);
 			const auto phrase = topicRootId
 				? tr::lng_replies_view_topic(tr::now)
 				: (repliesCount > 0)

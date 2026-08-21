@@ -722,6 +722,9 @@ bool AddViewRepliesAction(
 		: 0;
 	const auto repliesCount = item->repliesCount();
 	const auto hasReplyTo = (item->replyToId() != 0);
+	if (!topicRootId && !repliesCount && !hasReplyTo) {
+		return false;
+	}
 
 	const auto rootId = topicRootId
 		? topicRootId
