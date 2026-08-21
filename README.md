@@ -1,156 +1,82 @@
-# AyuGram
+# AyuGram Desktop (Custom Minimal Linux Edition)
 
-![AyuGram Logo](.github/AyuGram.png) ![AyuChan](.github/AyuChan.png)
+Кастомная, легковесная и безопасная сборка клиента Telegram / AyuGram для **Linux Mint** и других дистрибутивов на базе Linux.
 
-[ English  |   [Русский](README-RU.md) ]
+Сборка очищена от всех маркетинговых и крипто-функций Telegram, фоновой телеметрии и сторонних сетевых запросов, а также дополнена полезными инструментами для эффективной работы с сообщениями.
 
-## Features
+---
 
-- Full ghost mode (flexible)
-- Messages history
-- Anti-recall
-- Font customization
-- Streamer mode
-- Local Telegram Premium
-- Translator
-- Media preview & quick reaction on force click (macOS)
-- Enhanced appearance
+## ✨ Ключевые возможности
 
-And many more. Check out our [Documentation](https://docs.ayugram.one/desktop/).
+- 🚀 **Актуальный протокол MTProto (база v7.0.9+)**: Полная поддержка всех современных типов сообщений Telegram (решена проблема с сообщением *"сообщение не поддерживается"*).
+- 🌲 **Древовидная навигация ответов (Reply Tree)**: Возможность просматривать ветки ответов и цепочки сообщений в **любых** диалогах (включая личные сообщения, обычные группы и каналы через контекстное меню *«Просмотр ответов / Ветка»*).
+- 🔍 **Продвинутый умный поиск (RegEx + Морфология)**:
+  - **Регулярные выражения**: поиск по шаблонам `/pattern/` или с префиксом `regex:` с поддержкой флагов регистра.
+  - **Морфологический поиск (RU/EN)**: встроенный стеммер русского и английского языков (алгоритм Портера) находит сообщения по основам слов независимо от окончаний (*купить -> купил, покупка, куплю*).
+- 🌐 **Системный браузер**: Принудительное открытие всех внешних ссылок и веб-страниц исключительно в системном браузере по умолчанию (без встроенного Webview).
+- 📞 **Звонки и стриминг**: Полная нативная поддержка аудио- и видеозвонков через WebRTC.
+- 🎨 **Стикеры и медиа**: Сохранена поддержка стикерпаков, эмодзи и быстрой отправки файлов.
+- 💾 **Локальная история**: Локальное сохранение истории и удаленных сообщений в локальную базу SQLite (`ayudata.db`) на вашем ПК без отправки куда-либо.
 
-<h3>
-  <details>
-    <summary>Preview</summary>
-    <table>
-      <tr>
-        <td><img src='.github/demos/demo1.png' width='268' alt='Preferences'></td>
-        <td><img src='.github/demos/demo2.png' width='268' alt='AyuGram Options'></td>
-        <td><img src='.github/demos/demo3.png' width='268' alt='Message Filters'></td>
-      </tr>
-      <tr>
-        <td><img src='.github/demos/demo4.png' width='268' alt='Appearance'></td>
-        <td><img src='.github/demos/demo5.png' width='268' alt='Chats'></td>
-      </tr>
-    </table>
-  </details>
-</h3>
+---
 
-## Downloads
+## 🛡️ Безопасность и очистка от мусора
 
-### Windows
+Из кодовой базы полностью исключены потенциально опасные и ненужные компоненты:
 
-#### Official
+| Компонент / Функция | Статус | Описание |
+| :--- | :---: | :--- |
+| **`RCManager`** | ❌ Удален | Нейтрализованы периодические сетевые запросы к сторонним серверам за бейджами, каналами авторов и криптокошельками. |
+| **Телеметрия и Sentry** | ❌ Удалены | Отключены сбор метрик, отправка отчетов об ошибках и аналитика. |
+| **Чекер автообновлений** | ❌ Отключен | Клиент изолирован и не скачивает сторонние исполняемые файлы. |
+| **Сторонние сервисы** | ❌ Удалены | Вырезаны обращения к `dpaste.com` (экспорт фильтров переведен в локальный буфер обмена) и `itunes.apple.com`. |
+| **Сторисы (Stories)** | ❌ Отключены | Панель историй, предпросмотры и уведомления о сторисах скрыты. |
+| **Подарки, Звезды, TON** | ❌ Отключены | Полностью убраны элементы криптоинтеграции, донатов, платных реакций и подарков. |
+| **Ghost Mode** | ❌ Отключен | Работает в стандартном нативном режиме без модификации сетевых пакетов онлайна/чтения. |
+| **Лишняя кастомизация UI**| ❌ Отключена | Убраны нестандартные скругления, селекторы шрифтов и тяжелые кастомные палитры в пользу легкого нативного UI. |
 
-You can download prebuilt Windows binary from [Releases tab](https://github.com/AyuGram/AyuGramDesktop/releases) or from
-the [Telegram channel](https://t.me/AyuGramReleases).
+---
 
-#### Winget
+## 📦 Установка и запуск
 
-```bash
-winget install RadolynLabs.AyuGramDesktop
-```
+### 1. Скачивание готового бинарника (GitHub Actions)
 
-#### Scoop
+1. Перейдите во вкладку **[Actions](https://github.com/darakcheeff/AyuGramDesktop/actions)** репозитория.
+2. Выберите последний успешный запуск **Build Custom AyuGram (Linux x86_64)**.
+3. В секции **Artifacts** скачайте архив `AyuGram-Linux-Custom.tar.xz` (или из раздела **[Releases](https://github.com/darakcheeff/AyuGramDesktop/releases)**).
+4. Распакуйте и запустите:
+   ```bash
+   tar -xf AyuGram-Linux-Custom.tar.xz
+   chmod +x AyuGram
+   ./AyuGram
+   ```
 
-```bash
-scoop bucket add extras
-scoop install ayugram
-```
+---
 
-#### Self-built
+## 🛠️ Сборка из исходного кода
 
-Follow [official guide](https://github.com/AyuGram/AyuGramDesktop/blob/dev/docs/building-win-x64.md) if you want to
-build by yourself.
-
-### macOS
-
-#### Official
-
-You can download prebuilt macOS package from [Releases tab](https://github.com/AyuGram/AyuGramDesktop/releases).
-
-#### Homebrew
+Сборка выполняется автоматически через Docker в среде `centos_env` (совместима с glibc любых современных версий Linux Mint / Ubuntu):
 
 ```bash
-brew install --cask ayugram
+# 1. Клонирование репозитория
+git clone --recursive https://github.com/darakcheeff/AyuGramDesktop.git
+cd AyuGramDesktop
+
+# 2. Сборка автономного бинарника
+docker run --rm \
+    -u $(id -u) \
+    -v "$PWD:/usr/src/tdesktop" \
+    ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
+    /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+    -D TDESKTOP_API_ID=2040 \
+    -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627 \
+    -D TDESKTOP_DISABLE_AUTOUPDATE=ON
+
+# 3. Готовый бинарник будет находиться в директории out/Release/Telegram
 ```
 
-### Arch Linux
+---
 
-#### From source (recommended)
+## 📄 Лицензия
 
-Install `ayugram-desktop` from [AUR](https://aur.archlinux.org/packages/ayugram-desktop).
-
-#### Prebuilt binaries
-
-Install `ayugram-desktop-bin` from [AUR](https://aur.archlinux.org/packages/ayugram-desktop-bin).
-
-Note: these binaries aren't officially maintained by us.
-
-### NixOS
-
-#### Flake (recommended)
-
-Install `ayugram-desktop` from [ndfined-crp/ayugram-desktop](https://github.com/ndfined-crp/ayugram-desktop)
-
-#### Nixpkgs
-
-Install `ayugram-desktop` from [nixpkgs](https://search.nixos.org/packages?channel=unstable&show=ayugram-desktop)
-
-### ALT Linux
-
-[Sisyphus](https://packages.altlinux.org/en/sisyphus/srpms/ayugram-desktop/)
-
-### Gentoo Linux
-
-See [this repository](https://codeberg.org/OverLessArtem/ayugram-ebuild-gentoo) for installation manual.
-
-### Void Linux
-See [this repository](https://codeberg.org/OverLessArtem/ayugram-template-void) for installation manual.
-
-### EPM
-
-`epm play ayugram`
-
-### Fedora
-
-From [RPM Fusion](https://admin.rpmfusion.org/pkgdb/package/free/ayugram-desktop/) repository.
-
-```bash
-dnf install ayugram-desktop
-```
-
-### Any other Linux distro
-
-Flatpak: https://github.com/0FL01/AyuGramDesktop-flatpak
-
-Or follow the [official guide](https://github.com/AyuGram/AyuGramDesktop/blob/dev/docs/building-linux.md).
-
-## Donation
-
-Enjoy using **AyuGram**? Consider sending us a tip!
-
-[Here's available methods.](https://docs.ayugram.one/donate/)
-
-## Credits
-
-### Telegram clients
-
-- [Telegram Desktop](https://github.com/telegramdesktop/tdesktop)
-- [Kotatogram](https://github.com/kotatogram/kotatogram-desktop)
-- [64Gram](https://github.com/TDesktop-x64/tdesktop)
-- [Forkgram](https://github.com/forkgram/tdesktop)
-
-### Libraries used
-
-- [JSON for Modern C++](https://github.com/nlohmann/json)
-- [SQLite](https://github.com/sqlite/sqlite)
-- [sqlite_orm](https://github.com/fnc12/sqlite_orm)
-- [androidx sources](https://github.com/androidx/androidx)
-
-### Icons
-
-- [Solar Icon Set](https://www.figma.com/community/file/1166831539721848736)
-
-### Bots
-
-- [TelegramDB](https://t.me/tgdatabase) for username lookup by ID (until closing free inline mode at 2 April 2026)
+Проект распространяется на условиях лицензии **GPL v3** с OpenSSL исключением.
