@@ -30,9 +30,12 @@ jobs:
           submodules: recursive
           fetch-depth: 1
 
-      - name: Patch Submodules Discovery
+      - name: Patch Unused CLD3 Stub
         run: |
-          sed -i 's/find_package(protobuf REQUIRED CONFIG)/find_package(Protobuf REQUIRED)/g' cmake/external/cld3/CMakeLists.txt || true
+          cat << 'STUB_EOF' > cmake/external/cld3/CMakeLists.txt
+          add_library(external_cld3 INTERFACE IMPORTED GLOBAL)
+          add_library(desktop-app::external_cld3 ALIAS external_cld3)
+          STUB_EOF
 
       - name: Pull build container
         run: |
@@ -47,7 +50,8 @@ jobs:
             /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
             -D TDESKTOP_API_ID=2040 \
             -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627 \
-            -D TDESKTOP_DISABLE_AUTOUPDATE=ON
+            -D TDESKTOP_DISABLE_AUTOUPDATE=ON \
+            -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON
 
       - name: Strip & Package Binary
         run: |
