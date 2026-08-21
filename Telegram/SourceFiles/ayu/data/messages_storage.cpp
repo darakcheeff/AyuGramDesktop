@@ -1,4 +1,4 @@
-﻿// This is the source code of AyuGram for Desktop.
+// This is the source code of AyuGram for Desktop.
 //
 // We do not and cannot prevent the use of our code,
 // but be respectful and credit the original author.
@@ -37,11 +37,7 @@ void map(not_null<HistoryItem*> item, AyuMessageBase &message) {
 	message.groupedId = item->groupId().raw();
 	message.peerId = item->history()->peer->id.value & PeerId::kChatTypeMask;
 	message.fromId = item->from()->id.value & PeerId::kChatTypeMask;
-	if (item->topic()) {
-		message.topicId = item->topicRootId().bare;
-	} else {
-		message.topicId = 0;
-	}
+	message.topicId = item->topicRootId().bare;
 	message.messageId = item->id.bare;
 	message.date = item->date();
 	message.flags = AyuMapper::mapItemFlagsToMTPFlags(item);

@@ -1033,7 +1033,11 @@ void Histories::deleteMessages(const MessageIdsList &ids, bool revoke) {
 		const auto history = item->history();
 		const auto wasLast = (history->lastMessage() == item);
 		const auto wasInChats = (history->chatListMessage() == item);
-		item->destroy();
+		if (item->isDeleted()) {
+			item->destroy();
+		} else {
+			processMessageDelete(item);
+		}
 
 		if (wasLast || wasInChats) {
 			history->requestChatListMessage();

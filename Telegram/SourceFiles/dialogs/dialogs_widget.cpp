@@ -3578,7 +3578,8 @@ void Widget::requestMessages(bool fromStart) {
 		? _searchQueryCommunity
 		: nullptr;
 	const auto restrictFolder = (_searchQueryTab == ChatSearchTab::Archive)
-		|| !_searchQueryFromArchive;
+		|| !_searchQueryFromArchive
+		|| (_openedFolder != nullptr);
 	const auto flags = (community
 		? Flag::f_community
 		: restrictFolder
@@ -3593,6 +3594,8 @@ void Widget::requestMessages(bool fromStart) {
 			: Flag());
 	const auto folderId = (_searchQueryTab == ChatSearchTab::Archive)
 		? Data::Folder::kId
+		: _openedFolder
+		? _openedFolder->id()
 		: 0;
 	_searchProcess.requestId = session().api().request(
 		MTPmessages_SearchGlobal(

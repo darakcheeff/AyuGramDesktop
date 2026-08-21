@@ -1077,9 +1077,11 @@ void ServicePreMessage::init(
 int ServicePreMessage::resizeToWidth(int newWidth, ElementChatMode mode) {
 	width = newWidth;
 	if (mode == ElementChatMode::Wide) {
-		accumulate_min(
-			width,
-			st::msgMaxWidth + 2 * st::msgPhotoSkip + 2 * st::msgMargin.left());
+		const auto limit = int32(std::max(
+			double(st::msgMaxWidth),
+			(newWidth - 2 * st::msgMargin.left()) * 0.85
+		) + 2 * st::msgPhotoSkip + 2 * st::msgMargin.left());
+		accumulate_min(width, limit);
 	}
 
 	if (media) {

@@ -30,6 +30,14 @@ jobs:
           submodules: recursive
           fetch-depth: 1
 
+      - name: Setup ccache
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/.cache/ccache
+          key: ccache-linux-${{ github.sha }}
+          restore-keys: |
+            ccache-linux-
+
       - name: Patch Unused CLD3 Dependencies
         run: |
           cat << 'STUB_EOF' > cmake/external/cld3/CMakeLists.txt
@@ -55,9 +63,13 @@ jobs:
 
       - name: Build AyuGram Binary
         run: |
+          mkdir -p /home/runner/.cache/ccache
           docker run --rm \
             -u $(id -u) \
             -v "$GITHUB_WORKSPACE:/usr/src/tdesktop" \
+            -v "/home/runner/.cache/ccache:/.cache/ccache" \
+            -e CCACHE_DIR=/.cache/ccache \
+            -e CCACHE_MAXSIZE=2G \
             ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
             /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
             -D TDESKTOP_API_ID=2040 \
@@ -86,16 +98,18 @@ jobs:
           tag_name: custom-linux-v7.0.9
           name: Custom AyuGram Linux Release
           body: |
-            ### Custom AyuGram Build for Linux (Mint / Ubuntu)
+            ### Custom AyuGram Linux Release
             - **Base**: AyuGram v7.0.9 (Latest MTProto layer support)
             - **Features**:
               - Tree/replies navigation for all chats
               - RegEx and morphology (RU/EN) stemming search
+              - Active folder search filter
+              - Responsive / Wide chat post layout
+              - Fixed Issue #454 (Topic deleted message preservation)
+              - Fixed Issue #424 (Self-deleted message preservation)
               - System default browser enforced (no embedded webview)
               - Stories completely disabled
               - Gifts, TON/Crypto, Stars completely disabled
-              - UI customizations stripped (clean native look)
-              - Ghost mode removed (clean standard client)
               - Remote pings & telemetry (RCManager, dpaste, iTunes, Sentry) completely neutralized
             - **Artifact**: `AyuGram-Linux-Custom.tar.xz` (Standalone portable binary)
           files: out/Release/AyuGram-Linux-Custom.tar.xz

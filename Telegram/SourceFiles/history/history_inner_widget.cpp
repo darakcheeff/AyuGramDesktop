@@ -5543,7 +5543,11 @@ void HistoryInner::mouseActionUpdate() {
 					auto dateLeft = st::msgServiceMargin.left();
 					auto maxwidth = _contentWidth;
 					if (_isChatWide) {
-						maxwidth = qMin(maxwidth, int32(st::msgMaxWidth + 2 * st::msgPhotoSkip + 2 * st::msgMargin.left()));
+						const auto limit = int32(std::max(
+							double(st::msgMaxWidth),
+							(maxwidth - 2 * st::msgMargin.left()) * 0.85
+						) + 2 * st::msgPhotoSkip + 2 * st::msgMargin.left());
+						maxwidth = qMin(maxwidth, limit);
 					}
 					auto widthForDate = maxwidth - st::msgServiceMargin.left() - st::msgServiceMargin.left();
 
@@ -5592,7 +5596,11 @@ void HistoryInner::mouseActionUpdate() {
 					auto barLeft = st::msgServiceMargin.left();
 					auto maxwidth = _contentWidth;
 					if (_isChatWide) {
-						maxwidth = qMin(maxwidth, int32(st::msgMaxWidth + 2 * st::msgPhotoSkip + 2 * st::msgMargin.left()));
+						const auto limit = int32(std::max(
+							double(st::msgMaxWidth),
+							(maxwidth - 2 * st::msgMargin.left()) * 0.85
+						) + 2 * st::msgPhotoSkip + 2 * st::msgMargin.left());
+						maxwidth = qMin(maxwidth, limit);
 					}
 					auto widthForBar = maxwidth - st::msgServiceMargin.left() - st::msgServiceMargin.left();
 
