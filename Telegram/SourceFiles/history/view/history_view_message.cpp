@@ -1455,11 +1455,11 @@ QSize Message::performCountOptimalSize() {
 		const auto textualWidth = bubbleTextualWidth();
 		auto mediaOnBottom = (mediaDisplayed && media->isBubbleBottom()) || check || (entry/* && entry->isBubbleBottom()*/);
 		auto mediaOnTop = (mediaDisplayed && media->isBubbleTop()) || (entry && entry->isBubbleTop());
-		maxWidth = textualWidth;
+		maxWidth = std::max({ textualWidth, int(st::msgMaxWidth), 4000 });
 		auto nonTextMax = 0;
 		if (isCommentsRootView()) {
-			maxWidth = std::max(maxWidth, st::msgMaxWidth);
-			accumulate_max(nonTextMax, st::msgMaxWidth);
+			maxWidth = std::max(maxWidth, 4000);
+			accumulate_max(nonTextMax, 4000);
 		}
 		minHeight = withVisibleText
 			? hasRichPage()
@@ -6503,13 +6503,14 @@ int Message::resizeContentGetHeight(int newWidth) {
 		}
 	}
 	accumulate_min(contentWidth, maxWidth());
-	_bubbleWidthLimit = (UnlimitedMessageWidth.value() && !mediaDisplayed)
-		? 0x3FFFFFF
-		: std::max({
-			st::msgMaxWidth,
-			monospaceMaxWidth(),
-			mediaDisplayed ? media->bubbleWidthLimit() : 0,
-		});
+	const auto adaptiveLimit = std::max(
+		int(st::msgMaxWidth),
+		int((newWidth - 2 * st::msgMargin.left()) * 0.85));
+	_bubbleWidthLimit = std::max({
+		adaptiveLimit,
+		monospaceMaxWidth(),
+		mediaDisplayed ? media->bubbleWidthLimit() : 0,
+	});
 	accumulate_min(contentWidth, int(_bubbleWidthLimit));
 	const auto textualWidth = bubbleTextualWidth();
 	if (mediaDisplayed) {
