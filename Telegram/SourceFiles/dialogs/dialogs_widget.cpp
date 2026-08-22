@@ -3598,8 +3598,7 @@ void Widget::requestMessages(bool fromStart) {
 		: _openedFolder
 		? _openedFolder->id()
 		: 0;
-	const auto isRegex = SmartSearch::IsRegexQuery(_searchQuery);
-	const auto serverQuery = isRegex ? QString() : _searchQuery;
+	const auto serverQuery = SmartSearch::ExtractServerQuery(_searchQuery);
 	_searchProcess.requestId = session().api().request(
 		MTPmessages_SearchGlobal(
 			MTP_flags(flags),

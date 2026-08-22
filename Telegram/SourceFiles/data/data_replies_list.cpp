@@ -465,7 +465,9 @@ bool RepliesList::applyUpdate(const MessageUpdate &update) {
 	}
 
 	const auto id = update.item->id;
-	const auto inThread = update.item->inThread(_rootId);
+	const auto inThread = update.item->inThread(_rootId)
+		|| (update.item->replyToId() == _rootId)
+		|| (update.item->replyToTop() == _rootId);
 	const auto added = (update.flags & Flag::ReplyToTopAdded);
 	const auto i = ranges::lower_bound(_list, id, std::greater<>());
 	if (update.flags & Flag::Destroyed) {
@@ -532,6 +534,24 @@ HistoryItem *RepliesList::lookupRoot() {
 void RepliesList::loadAround(MsgId id) {
 	Expects(!_creating);
 
+	if (!_history->peer->isBroadcast() && !_history->isForum()) {
+		_list.clear();
+		for (const auto &item : _history->loadedMessages()) {
+			if (item->inThread(_rootId) || item->replyToId() == _rootId || item->replyToTop() == _rootId) {
+				const auto mid = item->id;
+				if (mid != _rootId && !ranges::contains(_list, mid)) {
+					_list.push_back(mid);
+				}
+			}
+		}
+		ranges::sort(_list, std::greater<>());
+		_skippedBefore = 0;
+		_skippedAfter = 0;
+		_fullCount = _list.size();
+		_listChanges.fire({});
+		return;
+	}
+
 	if (_loadingAround && *_loadingAround == id) {
 		return;
 	}
@@ -588,6 +608,10 @@ void RepliesList::loadAround(MsgId id) {
 void RepliesList::loadBefore() {
 	Expects(!_list.empty());
 
+	if (!_history->peer->isBroadcast() && !_history->isForum()) {
+		return;
+	}
+
 	if (_loadingAround) {
 		histories().cancelRequest(base::take(_beforeId));
 	} else if (_beforeId) {
@@ -633,6 +657,10 @@ void RepliesList::loadBefore() {
 
 void RepliesList::loadAfter() {
 	Expects(!_list.empty());
+
+	if (!_history->peer->isBroadcast() && !_history->isForum()) {
+		return;
+	}
 
 	if (_afterId) {
 		return;

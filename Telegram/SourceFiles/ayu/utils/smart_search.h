@@ -15,6 +15,9 @@ bool IsRegexQuery(const QString &query);
 // Compile regex from query string
 QString ExtractRegexPattern(const QString &query);
 
+// Extract clean server keyword query for MTProto API
+QString ExtractServerQuery(const QString &query);
+
 // Main matching function: matches text against query using regex, morphology stemming or exact substring
 bool Matches(const QString &text, const QString &query);
 

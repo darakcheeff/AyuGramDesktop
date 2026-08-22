@@ -139,6 +139,7 @@ QString StemWord(const QString &word) {
 
 bool IsRegexQuery(const QString &query) {
 	const auto trimmed = query.trimmed();
+	if (trimmed.isEmpty()) return false;
 	if (trimmed.startsWith(QString::fromUtf8("regex:"), Qt::CaseInsensitive)) {
 		return true;
 	}
@@ -151,24 +152,44 @@ bool IsRegexQuery(const QString &query) {
 			return true;
 		}
 	}
+	if (trimmed.contains(QChar(u'|')) || trimmed.contains(QString::fromUtf8("\\d")) || trimmed.contains(QString::fromUtf8(".*"))) {
+		return true;
+	}
 	return false;
 }
 
 QString ExtractRegexPattern(const QString &query) {
 	auto trimmed = query.trimmed();
 	if (trimmed.startsWith(QString::fromUtf8("regex:"), Qt::CaseInsensitive)) {
-		return trimmed.mid(6);
-	}
-	if (trimmed.startsWith(QString::fromUtf8("r/")) && trimmed.endsWith(QChar(u'/'))) {
-		return trimmed.mid(2, trimmed.length() - 3);
-	}
-	if (trimmed.startsWith(QChar(u'/'))) {
+		trimmed = trimmed.mid(6);
+	} else if (trimmed.startsWith(QString::fromUtf8("r/")) && trimmed.endsWith(QChar(u'/'))) {
+		trimmed = trimmed.mid(2, trimmed.length() - 3);
+	} else if (trimmed.startsWith(QChar(u'/'))) {
 		int lastSlash = trimmed.lastIndexOf(QChar(u'/'));
 		if (lastSlash > 0) {
-			return trimmed.mid(1, lastSlash - 1);
+			trimmed = trimmed.mid(1, lastSlash - 1);
 		}
 	}
+	// If user wrote \| (escaped pipe), normalize it to | for logical OR
+	trimmed.replace(QString::fromUtf8("\\|"), QString::fromUtf8("|"));
 	return trimmed;
+}
+
+QString ExtractServerQuery(const QString &query) {
+	if (!IsRegexQuery(query)) {
+		return query;
+	}
+	const auto pattern = ExtractRegexPattern(query);
+	static const QRegularExpression wordRx(QString::fromUtf8("[\\p{L}\\p{N}_]{2,}"));
+	auto it = wordRx.globalMatch(pattern);
+	while (it.hasNext()) {
+		auto match = it.next();
+		const auto w = match.captured(0);
+		if (w.length() >= 2) {
+			return w; // Send first real word keyword to server so it returns candidates
+		}
+	}
+	return pattern;
 }
 
 bool Matches(const QString &text, const QString &query) {

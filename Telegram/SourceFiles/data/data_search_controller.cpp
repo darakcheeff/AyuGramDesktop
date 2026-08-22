@@ -176,7 +176,7 @@ std::optional<SearchRequest> PrepareSearchRequest(
 		MTP_flags((topicRootId ? Flag::f_top_msg_id : Flag(0))
 			| (monoforumPeerId ? Flag::f_saved_peer_id : Flag(0))),
 		peer->input(),
-		MTP_string(SmartSearch::IsRegexQuery(query) ? QString() : query),
+		MTP_string(SmartSearch::ExtractServerQuery(query)),
 		MTP_inputPeerEmpty(),
 		(monoforumPeerId
 			? peer->owner().peer(monoforumPeerId)->input()
