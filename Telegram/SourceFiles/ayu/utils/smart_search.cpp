@@ -146,13 +146,7 @@ bool IsRegexQuery(const QString &query) {
 	if (trimmed.startsWith(QString::fromUtf8("r/")) && trimmed.endsWith(QChar(u'/')) && trimmed.length() > 3) {
 		return true;
 	}
-	if (trimmed.startsWith(QChar(u'/')) && trimmed.length() > 2) {
-		int lastSlash = trimmed.lastIndexOf(QChar(u'/'));
-		if (lastSlash > 0) {
-			return true;
-		}
-	}
-	if (trimmed.contains(QChar(u'|')) || trimmed.contains(QString::fromUtf8("\\d")) || trimmed.contains(QString::fromUtf8(".*"))) {
+	if (trimmed.startsWith(QChar(u'/')) && trimmed.endsWith(QChar(u'/')) && trimmed.length() > 2) {
 		return true;
 	}
 	return false;
@@ -164,80 +158,163 @@ QString ExtractRegexPattern(const QString &query) {
 		trimmed = trimmed.mid(6);
 	} else if (trimmed.startsWith(QString::fromUtf8("r/")) && trimmed.endsWith(QChar(u'/'))) {
 		trimmed = trimmed.mid(2, trimmed.length() - 3);
-	} else if (trimmed.startsWith(QChar(u'/'))) {
-		int lastSlash = trimmed.lastIndexOf(QChar(u'/'));
-		if (lastSlash > 0) {
-			trimmed = trimmed.mid(1, lastSlash - 1);
-		}
+	} else if (trimmed.startsWith(QChar(u'/')) && trimmed.endsWith(QChar(u'/')) && trimmed.length() > 2) {
+		trimmed = trimmed.mid(1, trimmed.length() - 2);
 	}
 	// If user wrote \| (escaped pipe), normalize it to | for logical OR
 	trimmed.replace(QString::fromUtf8("\\|"), QString::fromUtf8("|"));
 	return trimmed;
 }
 
-QString ExtractServerQuery(const QString &query) {
-	if (!IsRegexQuery(query)) {
-		return query;
+QStringList ExtractKeywords(const QString &query) {
+	QString working = query;
+	// 1. Extract quoted phrases
+	static const QRegularExpression quoteRx(QString::fromUtf8("\"([^\"]+)\""));
+	auto qIt = quoteRx.globalMatch(working);
+	QStringList results;
+	while (qIt.hasNext()) {
+		results.append(qIt.next().captured(1));
 	}
-	const auto pattern = ExtractRegexPattern(query);
+	working.remove(quoteRx);
+
+	// 2. Remove exclusions (-word or !word)
+	static const QRegularExpression excludeRx(QString::fromUtf8("[-!]\\S+"));
+	working.remove(excludeRx);
+
+	// 3. Extract alphanumeric word tokens (at least 2 chars)
 	static const QRegularExpression wordRx(QString::fromUtf8("[\\p{L}\\p{N}_]{2,}"));
-	auto it = wordRx.globalMatch(pattern);
+	auto it = wordRx.globalMatch(working);
 	while (it.hasNext()) {
-		auto match = it.next();
-		const auto w = match.captured(0);
-		if (w.length() >= 2) {
-			return w; // Send first real word keyword to server so it returns candidates
+		const auto w = it.next().captured(0);
+		if (!results.contains(w, Qt::CaseInsensitive)) {
+			results.append(w);
 		}
 	}
-	return pattern;
+	return results;
 }
+
+QString ExtractServerQuery(const QString &query) {
+	const auto kw = ExtractKeywords(query);
+	if (!kw.isEmpty()) {
+		return kw.first();
+	}
+	return query.trimmed();
+}
+
+namespace {
+
+bool MatchesSingleTerm(
+		const QString &text,
+		const QString &term,
+		const QStringList &textStems) {
+	if (term.isEmpty()) {
+		return true;
+	}
+
+	// 1. Alternations: term1|term2|term3 (OR logic)
+	if (term.contains(QChar(u'|'))) {
+		const auto subterms = term.split(QChar(u'|'), Qt::SkipEmptyParts);
+		for (const auto &sub : subterms) {
+			if (MatchesSingleTerm(text, sub, textStems)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// 2. Wildcards (* and .*)
+	if (term.contains(QChar(u'*'))) {
+		if (term == QString::fromUtf8("*") || term == QString::fromUtf8(".*")) {
+			return true;
+		}
+		auto rxPat = QRegularExpression::escape(term);
+		rxPat.replace(QString::fromUtf8("\\.\\*"), QString::fromUtf8(".*"));
+		rxPat.replace(QString::fromUtf8("\\*"), QString::fromUtf8(".*"));
+		QRegularExpression rx(rxPat, QRegularExpression::CaseInsensitiveOption);
+		if (rx.isValid()) {
+			return rx.match(text).hasMatch();
+		}
+	}
+
+	// 3. Exact substring check (case-insensitive)
+	if (text.contains(term, Qt::CaseInsensitive)) {
+		return true;
+	}
+
+	// 4. Morphological (stem-based) matching
+	const auto qStem = StemWord(term);
+	for (const auto &ts : textStems) {
+		if (ts.contains(qStem, Qt::CaseInsensitive) || qStem.contains(ts, Qt::CaseInsensitive)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+} // namespace
 
 bool Matches(const QString &text, const QString &query) {
 	if (query.isEmpty()) return true;
 	if (text.isEmpty()) return false;
 
-	// 1. Check for RegEx query
+	// 1. Check for pure RegEx query (/pattern/ or regex:pattern)
 	if (IsRegexQuery(query)) {
-		QString pattern = ExtractRegexPattern(query);
+		const auto pattern = ExtractRegexPattern(query);
 		QRegularExpression rx(pattern, QRegularExpression::CaseInsensitiveOption);
 		if (rx.isValid()) {
 			return rx.match(text).hasMatch();
 		}
 	}
 
-	// 2. Exact substring check (case-insensitive)
-	if (text.contains(query, Qt::CaseInsensitive)) {
-		return true;
+	// 2. Parse advanced query tokens: exact quotes, exclusions (-word), positive terms
+	QString working = query;
+	QStringList exactPhrases;
+	static const QRegularExpression quoteRx(QString::fromUtf8("\"([^\"]+)\""));
+	auto qIt = quoteRx.globalMatch(working);
+	while (qIt.hasNext()) {
+		exactPhrases.append(qIt.next().captured(1));
+	}
+	working.remove(quoteRx);
+
+	QStringList excludedTerms;
+	QStringList positiveTerms;
+	const auto tokens = working.split(QRegularExpression(QString::fromUtf8("\\s+")), Qt::SkipEmptyParts);
+	for (const auto &token : tokens) {
+		if ((token.startsWith(QChar(u'-')) || token.startsWith(QChar(u'!'))) && token.length() > 1) {
+			excludedTerms.append(token.mid(1));
+		} else {
+			positiveTerms.append(token);
+		}
 	}
 
-	// 3. Morphological (stem-based) matching
+	// Prepare morphological stems for words in text
 	static const QRegularExpression wordSplitter(QString::fromUtf8("[\\s,.;:!?\"'()\\[\\]{}/<>-]+"));
-	const auto queryWords = query.split(wordSplitter, Qt::SkipEmptyParts);
-	if (queryWords.isEmpty()) {
-		return false;
-	}
-
 	const auto textWords = text.split(wordSplitter, Qt::SkipEmptyParts);
-	if (textWords.isEmpty()) {
-		return false;
-	}
-
 	QStringList textStems;
 	textStems.reserve(textWords.size());
 	for (const auto &tw : textWords) {
 		textStems.append(StemWord(tw));
 	}
 
-	for (const auto &qw : queryWords) {
-		const auto qStem = StemWord(qw);
-		bool found = false;
-		for (const auto &ts : textStems) {
-			if (ts.contains(qStem, Qt::CaseInsensitive) || qStem.contains(ts, Qt::CaseInsensitive)) {
-				found = true;
-				break;
-			}
+	// 3. Exclusions check: if text contains any excluded term, reject immediately
+	for (const auto &ex : excludedTerms) {
+		if (ex.isEmpty()) continue;
+		if (MatchesSingleTerm(text, ex, textStems)) {
+			return false;
 		}
-		if (!found) {
+	}
+
+	// 4. Exact phrases check: all quoted phrases must be present verbatim (case-insensitive)
+	for (const auto &exact : exactPhrases) {
+		if (!text.contains(exact, Qt::CaseInsensitive)) {
+			return false;
+		}
+	}
+
+	// 5. Positive terms check: all positive terms must match (each term can be an alternation A|B or wildcard A* or word)
+	for (const auto &posTerm : positiveTerms) {
+		if (!MatchesSingleTerm(text, posTerm, textStems)) {
 			return false;
 		}
 	}

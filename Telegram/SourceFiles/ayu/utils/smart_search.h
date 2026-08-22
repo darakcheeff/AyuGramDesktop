@@ -18,7 +18,16 @@ QString ExtractRegexPattern(const QString &query);
 // Extract clean server keyword query for MTProto API
 QString ExtractServerQuery(const QString &query);
 
-// Main matching function: matches text against query using regex, morphology stemming or exact substring
+// Extract all positive keywords from query for multi-query candidate retrieval
+QStringList ExtractKeywords(const QString &query);
+
+// Main matching function: matches text against query with support for:
+// - Exact quoted phrases: "exact phrase"
+// - Exclusions (minus-words): -word or -"phrase"
+// - Wildcards: word* or .*
+// - Alternations (OR): word1|word2
+// - Morphological stemming (RU / EN)
+// - Full RegEx: /pattern/ or regex:pattern
 bool Matches(const QString &text, const QString &query);
 
 } // namespace SmartSearch
