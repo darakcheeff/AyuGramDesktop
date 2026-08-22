@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history.h"
 #include "history/history_item.h"
 #include "history/history_item_helpers.h"
+#include "history/view/history_view_element.h"
 #include "main/main_session.h"
 #include "data/data_histories.h"
 #include "data/data_session.h"
