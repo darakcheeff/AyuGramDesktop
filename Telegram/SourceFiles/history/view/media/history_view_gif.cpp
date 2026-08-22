@@ -419,7 +419,7 @@ QSize Gif::countCurrentSize(int newWidth) {
 		if (botTop) {
 			accumulate_max(captionMaxWidth, botTop->maxWidth);
 		}
-		const auto maxWithCaption = qMin(st::msgMaxWidth, captionMaxWidth);
+		const auto maxWithCaption = std::max(int(st::msgMaxWidth), captionMaxWidth);
 		newWidth = qMin(qMax(newWidth, maxWithCaption), thumbMaxWidth);
 		newHeight = adjustHeightForLessCrop(
 			scaled,

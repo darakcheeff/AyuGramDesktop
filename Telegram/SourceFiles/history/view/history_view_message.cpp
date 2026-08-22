@@ -6532,9 +6532,11 @@ int Message::resizeContentGetHeight(int newWidth) {
 		if (!Get<TextAppearing>()) {
 			const auto use = textRealWidth();
 			if (use > 0) {
-				const auto shrunk = std::max(
+				const auto shrunk = std::max({
 					use + st::msgPadding.left() + st::msgPadding.right(),
-					int(_nonTextMaxWidth));
+					int(_nonTextMaxWidth),
+					monospaceMaxWidth(),
+				});
 				accumulate_min(contentWidth, shrunk);
 			}
 		}

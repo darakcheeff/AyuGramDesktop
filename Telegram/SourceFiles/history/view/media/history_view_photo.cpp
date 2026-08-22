@@ -303,8 +303,8 @@ QSize Photo::countCurrentSize(int newWidth) {
 			accumulate_max(captionMaxWidth, botTop->maxWidth);
 		}
 		if (botTop || !_parent->data()->isFakeAboutView()) {
-			const auto maxWithCaption = qMin(
-				st::msgMaxWidth,
+			const auto maxWithCaption = std::max(
+				int(st::msgMaxWidth),
 				captionMaxWidth);
 			newWidth = qMin(qMax(newWidth, maxWithCaption), thumbMaxWidth);
 			newHeight = adjustHeightForLessCrop(
