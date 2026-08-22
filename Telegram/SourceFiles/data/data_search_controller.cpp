@@ -262,9 +262,7 @@ SearchResult ParseSearchResult(
 			const auto itemId = item->id;
 			if ((type == Storage::SharedMediaType::kCount)
 				|| item->sharedMediaTypes().test(type)) {
-				if (!SmartSearch::IsRegexQuery(query) || SmartSearch::Matches(item->originalText().text, query)) {
-					result.messageIds.push_back(itemId);
-				}
+				result.messageIds.push_back(itemId);
 			}
 			accumulate_min(result.noSkipRange.from, itemId);
 			accumulate_max(result.noSkipRange.till, itemId);
