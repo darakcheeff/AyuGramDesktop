@@ -30,13 +30,15 @@ jobs:
           submodules: recursive
           fetch-depth: 1
 
-      - name: Setup ccache
+      - name: Setup Workspace Cache
         uses: actions/cache@v4
         with:
-          path: /home/runner/.cache/ccache
-          key: ccache-linux-${{ github.run_id }}
+          path: |
+            .ccache
+            out
+          key: build-cache-linux-${{ github.run_id }}
           restore-keys: |
-            ccache-linux-
+            build-cache-linux-
 
       - name: Patch Unused CLD3 Dependencies
         run: |
@@ -63,15 +65,14 @@ jobs:
 
       - name: Build AyuGram Binary
         run: |
-          mkdir -p /home/runner/.cache/ccache
+          mkdir -p .ccache
           docker run --rm \
             -u $(id -u) \
             -v "$GITHUB_WORKSPACE:/usr/src/tdesktop" \
-            -v "/home/runner/.cache/ccache:/.cache/ccache" \
-            -e CCACHE_DIR=/.cache/ccache \
+            -e CCACHE_DIR=/usr/src/tdesktop/.ccache \
             -e CCACHE_BASEDIR=/usr/src/tdesktop \
             -e CCACHE_NOHASHDIR=1 \
-            -e CCACHE_MAXSIZE=5G \
+            -e CCACHE_MAXSIZE=10G \
             ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
             /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
             -D CMAKE_C_COMPILER_LAUNCHER=ccache \
