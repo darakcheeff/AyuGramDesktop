@@ -536,11 +536,14 @@ void RepliesList::loadAround(MsgId id) {
 
 	if (!_history->peer->isBroadcast() && !_history->isForum()) {
 		_list.clear();
-		for (const auto &item : _history->loadedMessages()) {
-			if (item->inThread(_rootId) || item->replyToId() == _rootId || item->replyToTop() == _rootId) {
-				const auto mid = item->id;
-				if (mid != _rootId && !ranges::contains(_list, mid)) {
-					_list.push_back(mid);
+		for (const auto &block : _history->blocks) {
+			for (const auto &element : block->messages) {
+				const auto item = element->data();
+				if (item->inThread(_rootId) || item->replyToId() == _rootId || item->replyToTop() == _rootId) {
+					const auto mid = item->id;
+					if (mid != _rootId && !ranges::contains(_list, mid)) {
+						_list.push_back(mid);
+					}
 				}
 			}
 		}
