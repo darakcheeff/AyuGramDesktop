@@ -535,7 +535,7 @@ HistoryItem *RepliesList::lookupRoot() {
 void RepliesList::loadAround(MsgId id) {
 	Expects(!_creating);
 
-	if (!_history->peer->isBroadcast() && !_history->isForum()) {
+	if (_history->peer->isUser() || _history->peer->isChat()) {
 		_list.clear();
 		for (const auto &block : _history->blocks) {
 			for (const auto &element : block->messages) {
