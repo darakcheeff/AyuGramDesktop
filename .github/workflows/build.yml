@@ -83,6 +83,9 @@ jobs:
             /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
             -D CMAKE_C_COMPILER_LAUNCHER=ccache \
             -D CMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -D CMAKE_UNITY_BUILD=ON \
+            -D CMAKE_UNITY_BUILD_BATCH_SIZE=16 \
+            -D DESKTOP_APP_DISABLE_QT_PLUGINS=ON \
             -D TDESKTOP_API_ID=2040 \
             -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627 \
             -D TDESKTOP_DISABLE_AUTOUPDATE=ON \
