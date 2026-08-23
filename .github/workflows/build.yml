@@ -44,7 +44,7 @@ jobs:
           restore-keys: |
             build-cache-linux-
 
-      - name: Patch Unused CLD3 Dependencies
+      - name: Patch Build Dependencies
         run: |
           cat << 'STUB_EOF' > cmake/external/cld3/CMakeLists.txt
           add_library(external_cld3 INTERFACE IMPORTED GLOBAL)
@@ -62,6 +62,8 @@ jobs:
 
           } // namespace Platform::Language
           SPELL_EOF
+
+          sed -i 's/PROPERTIES FOLDER "(external)"/PROPERTIES FOLDER "(external)" UNITY_BUILD OFF/' cmake/external/cmark_gfm/CMakeLists.txt
 
       - name: Pull build container
         run: |
