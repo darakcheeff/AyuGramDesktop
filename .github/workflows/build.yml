@@ -31,6 +31,7 @@ jobs:
           key: ccache-linux-${{ github.run_id }}
           restore-keys: |
             ccache-linux-
+            build-cache-linux-
 
       - name: Patch Build Dependencies
         run: |
@@ -63,6 +64,7 @@ jobs:
           docker run --rm \
             -u $(id -u) \
             -v "$GITHUB_WORKSPACE:/usr/src/tdesktop" \
+            -e HOME=/usr/src/tdesktop \
             -e CCACHE_DIR=/usr/src/tdesktop/.ccache \
             -e CCACHE_BASEDIR=/usr/src/tdesktop \
             -e CCACHE_NOHASHDIR=1 \
