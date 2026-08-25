@@ -3593,7 +3593,7 @@ void Widget::requestMessages(bool fromStart) {
 	const auto kwIndex = _searchProcess.serverKeywordIndex;
 	const auto keyword = kwList.isEmpty()
 		? _searchQuery.trimmed()
-		: kwList[std::min(kwIndex, kwList.size() - 1)];
+		: kwList[std::min(kwIndex, int(kwList.size()) - 1)];
 	requestMessagesForKeyword(fromStart, keyword, kwIndex);
 
 	if (fromStart && _searchWithPostsPreview) {
@@ -3656,7 +3656,7 @@ void Widget::requestMessagesForKeyword(
 		const auto kwList = _searchProcess.serverKeywords;
 		const auto nextIndex = keywordIndex + 1;
 		const bool hasMoreKeywords = !kwList.isEmpty()
-			&& nextIndex < kwList.size();
+			&& (nextIndex < int(kwList.size()));
 
 		if (hasMoreKeywords && fromStart) {
 			// We have more keywords to fetch for a fresh "page 0" search.

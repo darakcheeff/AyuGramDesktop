@@ -66,9 +66,11 @@ jobs:
             -e CCACHE_DIR=/usr/src/tdesktop/.ccache \
             -e CCACHE_BASEDIR=/usr/src/tdesktop \
             -e CCACHE_NOHASHDIR=1 \
-            -e CCACHE_MAXSIZE=10G \
-            -e CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime \
-            -e CCACHE_COMPILERCHECK=content \
+            -e CCACHE_DIRECT=1 \
+            -e CCACHE_DEPEND=1 \
+            -e CCACHE_MAXSIZE=15G \
+            -e CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime,file_macro,line_macro,modules,locale \
+            -e CCACHE_COMPILERCHECK=none \
             ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
             /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
             -D CMAKE_C_COMPILER_LAUNCHER=ccache \
