@@ -6517,7 +6517,12 @@ int Message::resizeContentGetHeight(int newWidth) {
 		media->resizeGetHeight(contentWidth);
 		if (media->width() < contentWidth) {
 			if (hasVisibleText()) {
-				accumulate_min(contentWidth, std::max(media->width(), textualWidth));
+				const auto mediaLimit = std::max({
+					media->width(),
+					int(_nonTextMaxWidth),
+					monospaceMaxWidth(),
+				});
+				accumulate_min(contentWidth, mediaLimit);
 			} else if (media->width() < textualWidth
 				&& !media->enforceBubbleWidth()) {
 				accumulate_min(contentWidth, textualWidth);

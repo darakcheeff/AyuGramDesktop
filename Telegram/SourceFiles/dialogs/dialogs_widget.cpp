@@ -117,7 +117,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 namespace Dialogs {
 namespace {
 
-constexpr auto kSearchPerPage = 50;
+constexpr auto kSearchPerPage = 100;
 constexpr auto kStoriesExpandDuration = crl::time(200);
 constexpr auto kSearchRequestDelay = crl::time(900);
 

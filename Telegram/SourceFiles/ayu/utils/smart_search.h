@@ -1,4 +1,4 @@
-// Smart search utility for RegEx & Russian/English Morphology stemming
+// Smart search utility for AST Boolean Expressions, Morphology & RegEx
 #pragma once
 
 #include <QtCore/QString>
@@ -22,11 +22,12 @@ QString ExtractServerQuery(const QString &query);
 QStringList ExtractKeywords(const QString &query);
 
 // Main matching function: matches text against query with support for:
-// - Exact quoted phrases: "exact phrase"
-// - Exclusions (minus-words): -word or -"phrase"
-// - Wildcards: word* or .*
-// - Alternations (OR): word1|word2
-// - Morphological stemming (RU / EN)
+// - Boolean expressions with parentheses: (замена | продление) внж
+// - Exact quoted phrases: "вид на жительство"
+// - Exclusions (minus-words): -посредники or !посредники
+// - Wildcards: продл* or .*
+// - Alternations (OR): A | B | C
+// - Full Morphological stemming (Russian & English noun/verb/adjective declensions)
 // - Full RegEx: /pattern/ or regex:pattern
 bool Matches(const QString &text, const QString &query);
 
