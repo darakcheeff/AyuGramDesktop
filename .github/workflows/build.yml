@@ -1,16 +1,6 @@
 name: Build Custom AyuGram (Linux x86_64)
 
 on:
-  push:
-    branches:
-      - dev
-      - main
-    tags:
-      - 'v*'
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '.gitignore'
   workflow_dispatch:
 
 permissions:
