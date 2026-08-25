@@ -172,7 +172,7 @@ QStringList ExtractKeywords(const QString &query) {
 	QStringList results;
 
 	// 1. Extract exact quoted phrases: "exact phrase"
-	static const QRegularExpression quoteRx(QString::fromUtf8(""([^"]+)""));
+	static const QRegularExpression quoteRx(QString::fromUtf8("\"([^\"]+)\""));
 	auto qIt = quoteRx.globalMatch(working);
 	while (qIt.hasNext()) {
 		const auto phrase = qIt.next().captured(1).trimmed();
@@ -183,7 +183,7 @@ QStringList ExtractKeywords(const QString &query) {
 	working.remove(quoteRx);
 
 	// 2. Remove exclusions (-word or !word)
-	static const QRegularExpression excludeRx(QString::fromUtf8("[-!]\S+"));
+	static const QRegularExpression excludeRx(QString::fromUtf8("[-!]\\S+"));
 	working.remove(excludeRx);
 
 	// 3. Remove grouping parens and operator symbols
@@ -579,7 +579,7 @@ bool Matches(const QString &text, const QString &query) {
 	}
 
 	// 2. Tokenize text into words & morphological stems
-	static const QRegularExpression wordSplitter(QString::fromUtf8("[\\s,.;:!?"\x27()\\[\\]{}/<>-]+"));
+	static const QRegularExpression wordSplitter(QString::fromUtf8("[\\s,.;:!?\"'()\\[\\]{}/<>-]+"));
 	const auto rawWords = text.split(wordSplitter, Qt::SkipEmptyParts);
 	QStringList words;
 	QStringList stems;
