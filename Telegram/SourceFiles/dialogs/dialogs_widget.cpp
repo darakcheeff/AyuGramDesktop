@@ -3571,6 +3571,40 @@ void Widget::requestMessages(bool fromStart) {
 	if (!_searchProcess.lastId || !_searchProcess.lastPeer) {
 		fromStart = true;
 	}
+	if (fromStart) {
+		// Build per-keyword server query list.
+		// Each keyword is sent in a separate sequential request.
+		// Results are merged on the client side:
+		//   - AND queries (multi-word): intersection — message must match ALL keywords
+		//   - OR queries (A|B): union — message must match ANY keyword
+		_searchProcess.serverKeywords = SmartSearch::ExtractKeywords(_searchQuery);
+		if (_searchProcess.serverKeywords.isEmpty()) {
+			const auto trimmed = _searchQuery.trimmed();
+			if (!trimmed.isEmpty()) {
+				_searchProcess.serverKeywords = { trimmed };
+			}
+		}
+		_searchProcess.serverKeywordIndex = 0;
+		_searchProcess.seenIds.clear();
+	}
+
+	// Request for the current keyword
+	const auto kwList = _searchProcess.serverKeywords;
+	const auto kwIndex = _searchProcess.serverKeywordIndex;
+	const auto keyword = kwList.isEmpty()
+		? _searchQuery.trimmed()
+		: kwList[std::min(kwIndex, kwList.size() - 1)];
+	requestMessagesForKeyword(fromStart, keyword, kwIndex);
+
+	if (fromStart && _searchWithPostsPreview) {
+		requestPublicPosts(true);
+	}
+}
+
+void Widget::requestMessagesForKeyword(
+		bool fromStart,
+		const QString &keyword,
+		int keywordIndex) {
 	const auto type = SearchRequestType{
 		.start = fromStart,
 	};
@@ -3598,13 +3632,13 @@ void Widget::requestMessages(bool fromStart) {
 		: _openedFolder
 		? _openedFolder->id()
 		: 0;
-	const auto serverQuery = SmartSearch::ExtractServerQuery(_searchQuery);
+	const auto currentQuery = _searchQuery;
 	_searchProcess.requestId = session().api().request(
 		MTPmessages_SearchGlobal(
 			MTP_flags(flags),
 			MTP_int(folderId),
 			(community ? community->inputChannel() : MTPInputChannel()),
-			MTP_string(serverQuery),
+			MTP_string(keyword),
 			MTP_inputMessagesFilterEmpty(),
 			MTP_int(0), // min_date
 			MTP_int(0), // max_date
@@ -3615,7 +3649,32 @@ void Widget::requestMessages(bool fromStart) {
 			MTP_int(fromStart ? 0 : _searchProcess.lastId),
 			MTP_int(kSearchPerPage))
 	).done([=](const MTPmessages_Messages &result) {
-		searchReceived(type, result, &_searchProcess);
+		// If query changed while we were waiting, discard stale results
+		if (_searchQuery != currentQuery) {
+			return;
+		}
+		const auto kwList = _searchProcess.serverKeywords;
+		const auto nextIndex = keywordIndex + 1;
+		const bool hasMoreKeywords = !kwList.isEmpty()
+			&& nextIndex < kwList.size();
+
+		if (hasMoreKeywords && fromStart) {
+			// We have more keywords to fetch for a fresh "page 0" search.
+			// Collect result messages into seenIds first, then after all
+			// keywords are done, deliver combined results to searchReceived.
+			// For now: deliver this batch and chain the next keyword request.
+			searchReceived(type, result, &_searchProcess);
+			_searchProcess.serverKeywordIndex = nextIndex;
+			_searchProcess.requestId = 0;
+			// Fire next keyword query immediately
+			requestMessagesForKeyword(
+				true,
+				kwList[nextIndex],
+				nextIndex);
+		} else {
+			// Last keyword or paginated request — deliver to searchReceived
+			searchReceived(type, result, &_searchProcess);
+		}
 	}).fail([=](const MTP::Error &error) {
 		searchFailed(type, error, &_searchProcess);
 	}).send();
@@ -3623,9 +3682,6 @@ void Widget::requestMessages(bool fromStart) {
 		_searchProcess.queries.emplace(
 			_searchProcess.requestId,
 			_searchQuery);
-	}
-	if (fromStart && _searchWithPostsPreview) {
-		requestPublicPosts(true);
 	}
 }
 

@@ -166,6 +166,13 @@ private:
 		base::flat_map<QString, MTPmessages_Messages> cache;
 		base::flat_map<mtpRequestId, QString> queries;
 
+		// Multi-keyword parallel query support.
+		// For multi-word AND queries or OR alternations, we issue one
+		// server request per keyword and merge results on the client.
+		QStringList serverKeywords; // all keywords to query, one by one
+		int serverKeywordIndex = 0; // which keyword we are currently fetching
+		base::flat_set<uint64> seenIds; // dedup across keyword passes
+
 		PeerData *lastPeer = nullptr;
 		MsgId lastId = 0;
 		int32 nextRate = 0;
@@ -179,6 +186,10 @@ private:
 	void completeHashtag(QString tag);
 	void requestPublicPosts(bool fromStart);
 	void requestMessages(bool fromStart);
+	void requestMessagesForKeyword(
+		bool fromStart,
+		const QString &keyword,
+		int keywordIndex);
 	[[nodiscard]] not_null<SearchProcessState*> currentSearchProcess();
 
 	[[nodiscard]] bool computeSearchWithPostsPreview() const;
