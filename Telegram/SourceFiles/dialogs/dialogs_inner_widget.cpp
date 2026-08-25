@@ -4790,10 +4790,18 @@ void InnerWidget::searchReceived(
 		if (_filterId > 0 && !history->inChatList(_filterId)) {
 			continue;
 		}
-		if (SmartSearch::IsRegexQuery(_searchState.query)) {
+		if (!_searchState.query.isEmpty()) {
 			if (!SmartSearch::Matches(item->originalText().text, _searchState.query)) {
 				continue;
 			}
+		}
+		const auto itemFullId = item->fullId();
+		const auto alreadyExists = ranges::contains(
+			results,
+			itemFullId,
+			[](const auto &r) { return r->item()->fullId(); });
+		if (alreadyExists) {
+			continue;
 		}
 		if (toPreview || !uniquePeers || !hasHistoryInResults(history)) {
 			const auto index = int(results.size());

@@ -259,7 +259,9 @@ QSize Photo::countOptimalSize() {
 		const auto botTop = _parent->Get<FakeBotAboutTop>();
 		const auto captionMaxWidth = _parent->textualMaxWidth();
 		if (botTop || !_parent->data()->isFakeAboutView()) {
-			maxWidth = std::max({ maxWidth, captionMaxWidth, int(st::msgMaxWidth) });
+			if (_parent->hasVisibleText() || botTop) {
+				maxWidth = std::max({ maxWidth, captionMaxWidth, int(st::msgMaxWidth) });
+			}
 			minHeight = adjustHeightForLessCrop(
 				dimensions,
 				{ maxWidth, minHeight });

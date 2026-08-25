@@ -1455,11 +1455,11 @@ QSize Message::performCountOptimalSize() {
 		const auto textualWidth = bubbleTextualWidth();
 		auto mediaOnBottom = (mediaDisplayed && media->isBubbleBottom()) || check || (entry/* && entry->isBubbleBottom()*/);
 		auto mediaOnTop = (mediaDisplayed && media->isBubbleTop()) || (entry && entry->isBubbleTop());
-		maxWidth = std::max({ textualWidth, int(st::msgMaxWidth), 4000 });
+		maxWidth = textualWidth;
 		auto nonTextMax = 0;
 		if (isCommentsRootView()) {
-			maxWidth = std::max(maxWidth, 4000);
-			accumulate_max(nonTextMax, 4000);
+			maxWidth = std::max(maxWidth, int(st::msgMaxWidth));
+			accumulate_max(nonTextMax, int(st::msgMaxWidth));
 		}
 		minHeight = withVisibleText
 			? hasRichPage()
