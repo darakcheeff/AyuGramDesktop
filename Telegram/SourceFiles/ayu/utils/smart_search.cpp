@@ -181,7 +181,28 @@ QStringList ExtractKeywords(const QString &query) {
 	static const QRegularExpression excludeRx(QString::fromUtf8("[-!]\\S+"));
 	working.remove(excludeRx);
 
-	// 3. Extract alphanumeric word tokens (at least 2 chars)
+	// 3. Handle alternations: if we have A|B, collect all alternatives as separate keywords
+	// so callers can do multi-pass server queries
+	static const QRegularExpression pipeRx(QString::fromUtf8("[|]"));
+	if (pipeRx.match(working).hasMatch()) {
+		// Extract all individual alternatives from alternation groups
+		// Each token like "замена|продление" → add both "замена" and "продление"
+		static const QRegularExpression tokenRx(QString::fromUtf8("[\\p{L}\\p{N}_|]{2,}"));
+		auto tokIt = tokenRx.globalMatch(working);
+		while (tokIt.hasNext()) {
+			const auto token = tokIt.next().captured(0);
+			// split on pipe
+			const auto parts = token.split(QChar(u'|'), Qt::SkipEmptyParts);
+			for (const auto &p : parts) {
+				if (p.length() >= 2 && !results.contains(p, Qt::CaseInsensitive)) {
+					results.append(p);
+				}
+			}
+		}
+		return results;
+	}
+
+	// 4. Extract alphanumeric word tokens (at least 2 chars)
 	static const QRegularExpression wordRx(QString::fromUtf8("[\\p{L}\\p{N}_]{2,}"));
 	auto it = wordRx.globalMatch(working);
 	while (it.hasNext()) {
@@ -195,10 +216,31 @@ QStringList ExtractKeywords(const QString &query) {
 
 QString ExtractServerQuery(const QString &query) {
 	const auto kw = ExtractKeywords(query);
-	if (!kw.isEmpty()) {
-		return kw.first();
+	if (kw.isEmpty()) {
+		return query.trimmed();
 	}
-	return query.trimmed();
+
+	// Check if query contains OR alternation (A|B syntax).
+	// In this case, send all alternatives to the server separated by spaces
+	// so Telegram's API searches for messages containing ANY of them.
+	const QString trimmed = query.trimmed();
+	static const QRegularExpression pipeCheck(QString::fromUtf8("[|]"));
+	if (pipeCheck.match(trimmed).hasMatch()) {
+		// Return all keywords (alternatives) joined by space
+		// Telegram API with multiple words performs broad OR-like search
+		return kw.join(QChar(u' '));
+	}
+
+	// For AND queries (multi-word): choose the longest keyword as anchor.
+	// Longer words are rarer, return fewer and more relevant server candidates.
+	// Local Matches() will still require ALL words to be present.
+	QString best = kw.first();
+	for (const auto &k : kw) {
+		if (k.length() > best.length()) {
+			best = k;
+		}
+	}
+	return best;
 }
 
 namespace {
