@@ -37,12 +37,10 @@ jobs:
       - name: Setup Workspace Cache
         uses: actions/cache@v4
         with:
-          path: |
-            .ccache
-            out
-          key: build-cache-linux-${{ github.run_id }}
+          path: .ccache
+          key: ccache-linux-${{ github.run_id }}
           restore-keys: |
-            build-cache-linux-
+            ccache-linux-
 
       - name: Patch Build Dependencies
         run: |
@@ -105,27 +103,19 @@ jobs:
           path: out/Release/AyuGram-Linux-Custom.tar.xz
           retention-days: 30
 
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+      - name: Extract Version Info
+        id: version
+        run: |
+          VERSION=$(grep -oP 'AppVersionStr = "\K[^"]+' Telegram/SourceFiles/core/version.h || echo "7.0.9-custom-b3")
+          echo "tag=v${VERSION}" >> $GITHUB_OUTPUT
+          echo "title=AyuGram Desktop v${VERSION} (Custom Linux Edition)" >> $GITHUB_OUTPUT
+
+      - name: Create / Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: custom-linux-v7.0.9
-          name: Custom AyuGram Linux Release
-          body: |
-            ### Custom AyuGram Linux Release
-            - **Base**: AyuGram v7.0.9 (Latest MTProto layer support)
-            - **Features**:
-              - Tree/replies navigation for all chats
-              - RegEx and morphology (RU/EN) stemming search
-              - Active folder search filter
-              - Responsive / Wide chat post layout
-              - Fixed Issue #454 (Topic deleted message preservation)
-              - Fixed Issue #424 (Self-deleted message preservation)
-              - System default browser enforced (no embedded webview)
-              - Stories completely disabled
-              - Gifts, TON/Crypto, Stars completely disabled
-              - Remote pings & telemetry (RCManager, dpaste, iTunes, Sentry) completely neutralized
-            - **Artifact**: `AyuGram-Linux-Custom.tar.xz` (Standalone portable binary)
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.title }}
+          body_path: CHANGELOG.md
           files: out/Release/AyuGram-Linux-Custom.tar.xz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
