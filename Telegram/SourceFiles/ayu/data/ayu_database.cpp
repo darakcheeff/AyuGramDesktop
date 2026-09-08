@@ -466,8 +466,8 @@ std::vector<LocalMessage> searchLocalMessages(ID userId, const std::string &sear
 		std::string escaped;
 		escaped.reserve(searchQuery.size());
 		for (const auto c : searchQuery) {
-			if (c == '%' || c == '_' || c == '\') {
-				escaped += '\';
+			if (c == '%' || c == '_' || c == '\\') {
+				escaped += '\\';
 			}
 			escaped += c;
 		}
