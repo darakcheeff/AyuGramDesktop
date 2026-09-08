@@ -14,5 +14,6 @@ namespace AyuCloudSync {
 
 void init(not_null<Main::Session*> session);
 void scheduleSync(not_null<Main::Session*> session);
+void syncNow(not_null<Main::Session*> session);
 
 } // namespace AyuCloudSync

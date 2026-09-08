@@ -1225,6 +1225,27 @@ void BuildViewSection(SectionBuilder &builder) {
 	});
 }
 
+void BuildSyncSection(SectionBuilder &builder) {
+	builder.addDivider();
+	builder.addSkip();
+	builder.addSubsectionTitle(rpl::single(QString::fromUtf8("Облачная синхронизация")));
+
+	const auto controller = builder.controller();
+	builder.addButton({
+		.id = u"folders/cloud_sync"_q,
+		.title = rpl::single(QString::fromUtf8("Синхронизировать папки в архивный канал")),
+		.st = &st::settingsButtonNoIcon,
+		.onClick = [=] {
+			AyuCloudSync::syncNow(&controller->session());
+			controller->showToast(QString::fromUtf8("Синхронизация запущена! Проверьте Архив."));
+		},
+	});
+	builder.addSkip();
+	builder.addDividerText(rpl::single(QString::fromUtf8(
+		"Все ваши папки (включая локальные сверх лимита) сохраняются в защищённый приватный канал «⚙️ AyuGram Sync Storage» в Архиве."
+	)));
+}
+
 class Folders : public Section<Folders> {
 public:
 	Folders(
@@ -1291,6 +1312,7 @@ void Folders::setupContent() {
 		BuildFoldersListSection(builder, state.get());
 		BuildTagsSection(builder, state.get());
 		BuildViewSection(builder);
+		BuildSyncSection(builder);
 
 		std::move(showFinished) | rpl::on_next([=] {
 			for (const auto &[id, entry] : *highlights) {

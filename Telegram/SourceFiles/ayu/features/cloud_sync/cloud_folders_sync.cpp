@@ -13,6 +13,7 @@
 #include "data/data_chat_filters.h"
 #include "data/data_channel.h"
 #include "data/data_user.h"
+#include "data/data_folder.h"
 #include "data/data_histories.h"
 #include "data/notify/data_notify_settings.h"
 #include "history/history.h"
@@ -49,7 +50,13 @@ public:
 
 	void start() {
 		loadFromLocalCache();
-		findAndSyncChannel();
+		if (const auto existing = findExistingSyncChannel()) {
+			_channel = existing;
+			ensureChannelArchivedAndMuted(existing);
+			fetchHistoryFromChannel(existing);
+		}
+		// Schedule sync after short delay once session is connected
+		_debounceTimer.callOnce(2000);
 	}
 
 	void scheduleSync() {
@@ -57,7 +64,67 @@ public:
 		_debounceTimer.callOnce(1000);
 	}
 
+	void syncNow() {
+		const auto &list = _session->data().chatsFilters().list();
+		const auto count = ranges::count_if(list, [](const auto &f) { return f.id() > 0; });
+		if (count == 0 && !_channel) {
+			return;
+		}
+
+		if (!_channel) {
+			_channel = findExistingSyncChannel();
+		}
+
+		if (_channel) {
+			ensureChannelArchivedAndMuted(_channel);
+			uploadToChannel(_channel);
+		} else {
+			findOrCreateSyncChannel([=](ChannelData *ch) {
+				if (ch) {
+					uploadToChannel(ch);
+				}
+			});
+		}
+	}
+
 private:
+	ChannelData *findExistingSyncChannel() {
+		if (_channel) {
+			return _channel;
+		}
+		const auto checkHistory = [&](History *history) -> ChannelData* {
+			if (history && history->peer) {
+				if (const auto channel = history->peer->asChannel()) {
+					if (channel->name() == QString::fromUtf8(kSyncChannelTitle) && channel->amCreator()) {
+						return channel;
+					}
+				}
+			}
+			return nullptr;
+		};
+
+		const auto archive = _session->data().folder(Data::Folder::kId);
+		for (const auto &row : archive->chatsList()->indexed()->all()) {
+			if (const auto ch = checkHistory(row->history())) {
+				return ch;
+			}
+		}
+		for (const auto &row : _session->data().chatsList()->indexed()->all()) {
+			if (const auto ch = checkHistory(row->history())) {
+				return ch;
+			}
+		}
+		return nullptr;
+	}
+
+	void ensureChannelArchivedAndMuted(not_null<ChannelData*> ch) {
+		_session->data().notifySettings().update(ch, Data::MuteValue{ .forever = true });
+		const auto history = _session->data().history(ch);
+		if (history->folderId() != Data::Folder::kId) {
+			_session->api().toggleHistoryArchived(history, true);
+		}
+	}
+
 	void loadFromLocalCache() {
 		const auto path = GetLocalCachePath(_session);
 		QFile file(path);
@@ -71,8 +138,26 @@ private:
 		try {
 			const auto j = nlohmann::json::parse(data.toStdString());
 			_localTimestamp = j.value("updatedAt", uint64(0));
+			if (j.contains("channelId") && j["channelId"].is_number()) {
+				const auto chId = j["channelId"].get<uint64>();
+				if (chId != 0) {
+					_channel = _session->data().channel(ChannelId(chId));
+				}
+			}
 			applyJson(j);
 		} catch (...) {
+		}
+	}
+
+	void saveToLocalCache() {
+		const auto path = GetLocalCachePath(_session);
+		QFile file(path);
+		if (file.open(QIODevice::WriteOnly)) {
+			auto j = serializeLocalFolders();
+			if (_channel) {
+				j["channelId"] = _channel->id.bare;
+			}
+			file.write(QByteArray::fromStdString(j.dump()));
 		}
 	}
 
@@ -81,6 +166,9 @@ private:
 		root["version"] = 1;
 		_localTimestamp = QDateTime::currentSecsSinceEpoch();
 		root["updatedAt"] = _localTimestamp;
+		if (_channel) {
+			root["channelId"] = _channel->id.bare;
+		}
 
 		const auto &list = _session->data().chatsFilters().list();
 		auto order = std::vector<FilterId>();
@@ -91,40 +179,45 @@ private:
 
 		auto folders = nlohmann::json::array();
 		for (const auto &filter : list) {
-			if (!Data::IsLocalFilterId(filter.id())) {
+			if (!filter.id()) {
 				continue;
 			}
 			using Flag = Data::ChatFilter::Flag;
 			nlohmann::json fj;
 			fj["id"] = filter.id();
+			fj["isLocal"] = Data::IsLocalFilterId(filter.id());
 			fj["title"] = filter.titleText().text.toStdString();
 			fj["iconEmoji"] = filter.iconEmoji().toStdString();
-			fj["colorIndex"] = filter.colorIndex() ? int(*filter.colorIndex()) : -1;
-			fj["contacts"] = bool(filter.flags() & Flag::Contacts);
-			fj["nonContacts"] = bool(filter.flags() & Flag::NonContacts);
-			fj["groups"] = bool(filter.flags() & Flag::Groups);
-			fj["channels"] = bool(filter.flags() & Flag::Channels);
-			fj["bots"] = bool(filter.flags() & Flag::Bots);
-			fj["noMuted"] = bool(filter.flags() & Flag::NoMuted);
-			fj["noRead"] = bool(filter.flags() & Flag::NoRead);
-			fj["noArchived"] = bool(filter.flags() & Flag::NoArchived);
-			fj["staticTitle"] = filter.staticTitle();
+			if (filter.colorIndex()) {
+				fj["colorIndex"] = int(*filter.colorIndex());
+			}
+			fj["contacts"] = (filter.flags() & Flag::Contacts) != 0;
+			fj["nonContacts"] = (filter.flags() & Flag::NonContacts) != 0;
+			fj["groups"] = (filter.flags() & Flag::Groups) != 0;
+			fj["channels"] = (filter.flags() & Flag::Channels) != 0;
+			fj["bots"] = (filter.flags() & Flag::Bots) != 0;
+			fj["noMuted"] = (filter.flags() & Flag::NoMuted) != 0;
+			fj["noRead"] = (filter.flags() & Flag::NoRead) != 0;
+			fj["noArchived"] = (filter.flags() & Flag::NoArchived) != 0;
+			fj["staticTitle"] = (filter.flags() & Flag::StaticTitle) != 0;
 
-			std::vector<std::string> always;
+			auto alwaysArr = nlohmann::json::array();
 			for (const auto &h : filter.always()) {
-				always.push_back(std::to_string(h->peer->id.value));
+				alwaysArr.push_back(h->peer->id.value);
 			}
-			std::vector<std::string> pinned;
+			fj["always"] = alwaysArr;
+
+			auto pinnedArr = nlohmann::json::array();
 			for (const auto &h : filter.pinned()) {
-				pinned.push_back(std::to_string(h->peer->id.value));
+				pinnedArr.push_back(h->peer->id.value);
 			}
-			std::vector<std::string> never;
+			fj["pinned"] = pinnedArr;
+
+			auto neverArr = nlohmann::json::array();
 			for (const auto &h : filter.never()) {
-				never.push_back(std::to_string(h->peer->id.value));
+				neverArr.push_back(h->peer->id.value);
 			}
-			fj["always"] = always;
-			fj["pinned"] = pinned;
-			fj["never"] = never;
+			fj["never"] = neverArr;
 
 			folders.push_back(fj);
 		}
@@ -132,26 +225,18 @@ private:
 		return root;
 	}
 
-	void saveToLocalCache() {
-		const auto j = serializeLocalFolders();
-		const auto path = GetLocalCachePath(_session);
-		QFile file(path);
-		if (file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-			const auto dumped = j.dump(2);
-			file.write(dumped.data(), dumped.size());
-		}
-	}
-
 	void applyJson(const nlohmann::json &j) {
 		if (j.contains("folders") && j["folders"].is_array()) {
-			using Flag = Data::ChatFilter::Flag;
 			for (const auto &fj : j["folders"]) {
 				const auto filterId = fj.value("id", FilterId(0));
+				if (!filterId) {
+					continue;
+				}
 				if (!Data::IsLocalFilterId(filterId)) {
 					continue;
 				}
-				auto flags = Flag(0)
-					| (fj.value("contacts", false) ? Flag::Contacts : Flag(0))
+				using Flag = Data::ChatFilter::Flag;
+				const auto flags = (fj.value("contacts", false) ? Flag::Contacts : Flag(0))
 					| (fj.value("nonContacts", false) ? Flag::NonContacts : Flag(0))
 					| (fj.value("groups", false) ? Flag::Groups : Flag(0))
 					| (fj.value("channels", false) ? Flag::Channels : Flag(0))
@@ -241,40 +326,6 @@ private:
 		}
 	}
 
-	void findAndSyncChannel() {
-		if (_channel) {
-			fetchHistoryFromChannel(_channel);
-			return;
-		}
-
-		// Search global
-		_session->api().request(MTPmessages_SearchGlobal(
-			MTP_flags(0),
-			MTP_int(0),
-			MTPInputChannel(),
-			MTP_string(QString::fromUtf8(kSyncTag)),
-			MTP_inputMessagesFilterEmpty(),
-			MTP_int(0),
-			MTP_int(0),
-			MTP_int(0),
-			MTP_inputPeerEmpty(),
-			MTP_int(0),
-			MTP_int(10)
-		)).done([=](const MTPmessages_Messages &result) {
-			result.match([&](const MTPDmessages_messagesNotModified &) {
-			}, [&](const auto &data) {
-				_session->data().processChats(data.vchats());
-				for (const auto &chat : data.vchats().v) {
-					if (chat.type() == mtpc_channel) {
-						_channel = _session->data().channel(chat.c_channel().vid());
-						fetchHistoryFromChannel(_channel);
-						return;
-					}
-				}
-			});
-		}).send();
-	}
-
 	void fetchHistoryFromChannel(not_null<ChannelData*> ch) {
 		_session->api().request(MTPmessages_GetHistory(
 			ch->input(),
@@ -327,28 +378,11 @@ private:
 		_session->api().sendMessage(std::move(message));
 	}
 
-	void syncNow() {
-		const auto hasLocal = ranges::any_of(
-			_session->data().chatsFilters().list(),
-			[](const auto &f) { return Data::IsLocalFilterId(f.id()); });
-		if (!hasLocal && !_channel) {
-			return;
-		}
-
-		if (_channel) {
-			uploadToChannel(_channel);
-		} else {
-			findOrCreateSyncChannel([=](ChannelData *ch) {
-				if (ch) {
-					uploadToChannel(ch);
-				}
-			});
-		}
-	}
-
 	void findOrCreateSyncChannel(Fn<void(ChannelData*)> done) {
-		if (_channel) {
-			done(_channel);
+		if (const auto existing = findExistingSyncChannel()) {
+			_channel = existing;
+			ensureChannelArchivedAndMuted(existing);
+			done(existing);
 			return;
 		}
 
@@ -384,10 +418,12 @@ private:
 
 			if (ch) {
 				_channel = ch;
-				_session->data().notifySettings().update(ch, Data::MuteValue{ .forever = true });
+				ensureChannelArchivedAndMuted(ch);
+				saveToLocalCache();
 			}
 			done(ch);
-		}).fail([=](const MTP::Error &) {
+		}).fail([=](const MTP::Error &error) {
+			LOG(("AyuCloudSync: Failed to create sync channel: %1").arg(error.type()));
 			done(nullptr);
 		}).send();
 	}
@@ -422,6 +458,10 @@ void init(not_null<Main::Session*> session) {
 
 void scheduleSync(not_null<Main::Session*> session) {
 	GetManager(session)->scheduleSync();
+}
+
+void syncNow(not_null<Main::Session*> session) {
+	GetManager(session)->syncNow();
 }
 
 } // namespace AyuCloudSync
