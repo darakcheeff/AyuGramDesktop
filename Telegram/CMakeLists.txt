@@ -248,6 +248,8 @@ set(ayugram_files
         ayu/data/ayu_database.h
         ayu/utils/smart_search.cpp
         ayu/utils/smart_search.h
+        ayu/features/cloud_sync/cloud_folders_sync.cpp
+        ayu/features/cloud_sync/cloud_folders_sync.h
 
         info/profile/info_profile_music_button.cpp
         info/profile/info_profile_music_button.h

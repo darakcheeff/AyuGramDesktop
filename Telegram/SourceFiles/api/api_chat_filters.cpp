@@ -23,6 +23,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_peer.h"
 #include "data/data_session.h"
 #include "history/history.h"
+#include "ayu/features/cloud_sync/cloud_folders_sync.h"
 #include "lang/lang_keys.h"
 #include "main/main_session.h"
 #include "ui/boxes/confirm_box.h"
@@ -873,11 +874,15 @@ void SaveNewFilterPinned(
 	const auto &order = session->data().pinnedChatsOrder(filterId);
 	auto &filters = session->data().chatsFilters();
 	const auto &filter = filters.applyUpdatedPinned(filterId, order);
-	session->api().request(MTPmessages_UpdateDialogFilter(
-		MTP_flags(MTPmessages_UpdateDialogFilter::Flag::f_filter),
-		MTP_int(filterId),
-		filter.tl()
-	)).send();
+	if (!Data::IsLocalFilterId(filterId)) {
+		session->api().request(MTPmessages_UpdateDialogFilter(
+			MTP_flags(MTPmessages_UpdateDialogFilter::Flag::f_filter),
+			MTP_int(filterId),
+			filter.tl()
+		)).send();
+	} else {
+		AyuCloudSync::scheduleSync(session);
+	}
 }
 
 void CheckFilterInvite(

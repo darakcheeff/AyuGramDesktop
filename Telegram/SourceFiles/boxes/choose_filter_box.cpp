@@ -23,6 +23,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "ui/empty_userpic.h"
 #include "ui/filter_icons.h"
+#include "ayu/features/cloud_sync/cloud_folders_sync.h"
 #include "ui/painter.h"
 #include "ui/rect.h"
 #include "ui/text/text_utilities.h" // tr::bold
@@ -168,37 +169,60 @@ void ChangeFilterById(
 		const auto was = *i;
 		const auto filter = ChangedFilter(was, history, add);
 		history->owner().chatsFilters().set(filter);
-		history->session().api().request(MTPmessages_UpdateDialogFilter(
-			MTP_flags(MTPmessages_UpdateDialogFilter::Flag::f_filter),
-			MTP_int(filter.id()),
-			filter.tl()
-		)).done([=, chat = history->peer->name(), name = filter.title()] {
+		if (!Data::IsLocalFilterId(filterId)) {
+			history->session().api().request(MTPmessages_UpdateDialogFilter(
+				MTP_flags(MTPmessages_UpdateDialogFilter::Flag::f_filter),
+				MTP_int(filter.id()),
+				filter.tl()
+			)).done([=, chat = history->peer->name(), name = filter.title()] {
+				const auto account = not_null(&history->session().account());
+				if (const auto controller = Core::App().windowFor(account)) {
+					const auto isStatic = name.isStatic;
+					controller->showToast({
+						.text = (add
+							? tr::lng_filters_toast_add
+							: tr::lng_filters_toast_remove)(
+								tr::now,
+								lt_chat,
+								tr::bold(chat),
+								lt_folder,
+								Ui::Text::Wrapped(name.text, EntityType::Bold),
+								tr::marked),
+						.textContext = Core::TextContext({
+							.session = &history->session(),
+							.customEmojiLoopLimit = isStatic ? -1 : 0,
+						}),
+					});
+				}
+			}).fail([=](const MTP::Error &error) {
+				LOG(("API Error: failed to %1 a dialog to a folder. %2")
+					.arg(add ? u"add"_q : u"remove"_q)
+					.arg(error.type()));
+				// Revert filter on fail.
+				history->owner().chatsFilters().set(was);
+			}).send();
+		} else {
+			AyuCloudSync::scheduleSync(&history->session());
 			const auto account = not_null(&history->session().account());
 			if (const auto controller = Core::App().windowFor(account)) {
-				const auto isStatic = name.isStatic;
+				const auto name = filter.title();
 				controller->showToast({
 					.text = (add
 						? tr::lng_filters_toast_add
 						: tr::lng_filters_toast_remove)(
 							tr::now,
 							lt_chat,
-							tr::bold(chat),
+							tr::bold(history->peer->name()),
 							lt_folder,
 							Ui::Text::Wrapped(name.text, EntityType::Bold),
 							tr::marked),
 					.textContext = Core::TextContext({
 						.session = &history->session(),
-						.customEmojiLoopLimit = isStatic ? -1 : 0,
+						.customEmojiLoopLimit = name.isStatic ? -1 : 0,
 					}),
 				});
 			}
-		}).fail([=](const MTP::Error &error) {
-			LOG(("API Error: failed to %1 a dialog to a folder. %2")
-				.arg(add ? u"add"_q : u"remove"_q)
-				.arg(error.type()));
-			// Revert filter on fail.
-			history->owner().chatsFilters().set(was);
-		}).send();
+		}
 	}
 }
 
@@ -366,23 +390,41 @@ void FillChooseFilterMenu(
 			if ((list.size() - 1) >= limit()) {
 				return;
 			}
-			const auto chooseNextId = [&] {
-				auto id = 2;
-				while (ranges::contains(list, id, &Data::ChatFilter::id)) {
-					++id;
+			const auto chooseNextId = [=] {
+				const auto serverLimit = session->data().premiumLimits().dialogFiltersServerLimit();
+				const auto serverCount = ranges::count_if(list, [](const auto &f) {
+					return f.id() > 0 && !Data::IsLocalFilterId(f.id());
+				});
+				if (serverCount < serverLimit) {
+					auto id = 2;
+					while (ranges::contains(list, id, &Data::ChatFilter::id)) {
+						++id;
+					}
+					return id;
+				} else {
+					auto id = Data::kLocalFilterIdThreshold;
+					while (ranges::contains(list, id, &Data::ChatFilter::id)) {
+						++id;
+					}
+					return id;
 				}
-				return id;
 			};
 			auto filter =
 				Data::ChatFilter({}, {}, {}, {}, {}, { history }, {}, {});
 			const auto send = [=](const Data::ChatFilter &filter) {
-				session->api().request(MTPmessages_UpdateDialogFilter(
-					MTP_flags(MTPmessages_UpdateDialogFilter::Flag::f_filter),
-					MTP_int(chooseNextId()),
-					filter.tl()
-				)).done([=] {
-					session->data().chatsFilters().reload();
-				}).send();
+				const auto nextId = chooseNextId();
+				if (!Data::IsLocalFilterId(nextId)) {
+					session->api().request(MTPmessages_UpdateDialogFilter(
+						MTP_flags(MTPmessages_UpdateDialogFilter::Flag::f_filter),
+						MTP_int(nextId),
+						filter.tl()
+					)).done([=] {
+						session->data().chatsFilters().reload();
+					}).send();
+				} else {
+					session->data().chatsFilters().set(filter.withId(nextId));
+					AyuCloudSync::scheduleSync(session);
+				}
 			};
 			strong->uiShow()->show(
 				Box(EditFilterBox, strong, std::move(filter), send, nullptr));

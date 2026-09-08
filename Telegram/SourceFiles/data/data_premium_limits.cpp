@@ -70,10 +70,13 @@ int PremiumLimits::dialogFiltersDefault() const {
 int PremiumLimits::dialogFiltersPremium() const {
 	return appConfigLimit("dialog_filters_limit_premium", 30);
 }
-int PremiumLimits::dialogFiltersCurrent() const {
+int PremiumLimits::dialogFiltersServerLimit() const {
 	return isPremium()
 		? dialogFiltersPremium()
 		: dialogFiltersDefault();
+}
+int PremiumLimits::dialogFiltersCurrent() const {
+	return 1000;
 }
 
 int PremiumLimits::dialogShareableFiltersDefault() const {

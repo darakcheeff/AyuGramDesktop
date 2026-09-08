@@ -36,6 +36,11 @@ struct ChatFilterTitle {
 
 [[nodiscard]] TextWithEntities ForceCustomEmojiStatic(TextWithEntities text);
 
+inline constexpr FilterId kLocalFilterIdThreshold = 1000;
+[[nodiscard]] inline bool IsLocalFilterId(FilterId id) {
+	return id >= kLocalFilterIdThreshold;
+}
+
 class ChatFilter final {
 public:
 	enum class Flag : ushort {
@@ -181,6 +186,7 @@ public:
 	const ChatFilter &applyUpdatedPinned(
 		FilterId id,
 		const std::vector<Dialogs::Key> &dialogs);
+	void reorderLocally(const std::vector<FilterId> &order);
 	void saveOrder(
 		const std::vector<FilterId> &order,
 		mtpRequestId after = 0);

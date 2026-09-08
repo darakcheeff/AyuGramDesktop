@@ -67,6 +67,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
+#include "ayu/features/cloud_sync/cloud_folders_sync.h"
 #include "api/api_blocked_peers.h"
 
 
@@ -308,6 +309,7 @@ Session::Session(
 	}, _lifetime);
 
 	InitializeBlockedPeers(this);
+	AyuCloudSync::init(this);
 }
 
 void Session::appConfigRefreshed() {

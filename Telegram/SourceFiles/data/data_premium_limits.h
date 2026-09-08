@@ -36,6 +36,7 @@ public:
 	[[nodiscard]] int dialogFiltersDefault() const;
 	[[nodiscard]] int dialogFiltersPremium() const;
 	[[nodiscard]] int dialogFiltersCurrent() const;
+	[[nodiscard]] int dialogFiltersServerLimit() const;
 
 	[[nodiscard]] int dialogShareableFiltersDefault() const;
 	[[nodiscard]] int dialogShareableFiltersPremium() const;

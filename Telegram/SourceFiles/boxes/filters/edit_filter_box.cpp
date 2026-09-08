@@ -23,6 +23,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/ui_integration.h"
 #include "data/stickers/data_custom_emoji.h"
 #include "data/stickers/data_stickers.h"
+#include "ayu/features/cloud_sync/cloud_folders_sync.h"
 #include "data/data_channel.h"
 #include "data/data_chat_filters.h"
 #include "data/data_document.h"
@@ -1157,11 +1158,15 @@ void EditExistingFilter(
 			MTP_flags(MTPDupdateDialogFilter::Flag::f_filter),
 			MTP_int(id),
 			tl));
-		session->api().request(MTPmessages_UpdateDialogFilter(
-			MTP_flags(MTPmessages_UpdateDialogFilter::Flag::f_filter),
-			MTP_int(id),
-			tl
-		)).send();
+		if (!Data::IsLocalFilterId(id)) {
+			session->api().request(MTPmessages_UpdateDialogFilter(
+				MTP_flags(MTPmessages_UpdateDialogFilter::Flag::f_filter),
+				MTP_int(id),
+				tl
+			)).send();
+		} else {
+			AyuCloudSync::scheduleSync(session);
+		}
 	};
 	const auto saveAnd = [=](
 			const Data::ChatFilter &data,

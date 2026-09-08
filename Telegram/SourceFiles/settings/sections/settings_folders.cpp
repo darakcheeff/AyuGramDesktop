@@ -23,6 +23,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history.h"
 #include "lang/lang_keys.h"
 #include "lottie/lottie_icon.h"
+#include "ayu/features/cloud_sync/cloud_folders_sync.h"
 #include "main/main_session.h"
 #include "settings/sections/settings_main.h"
 #include "settings/sections/settings_premium.h"
@@ -599,15 +600,36 @@ not_null<Ui::VerticalLayout*> SetupFoldersList(
 
 	const auto prepareGoodIdsForNewFilters = [=] {
 		const auto &list = session->data().chatsFilters().list();
+		const auto serverLimit = session->data().premiumLimits().dialogFiltersServerLimit();
 
-		auto localId = 1;
-		const auto chooseNextId = [&] {
-			++localId;
-			while (ranges::contains(list, localId, &Data::ChatFilter::id)) {
-				++localId;
+		auto serverCount = 0;
+		for (const auto &row : state->rows) {
+			const auto id = row.filter.id();
+			if (!row.removed && id > 0 && !Data::IsLocalFilterId(id)) {
+				++serverCount;
 			}
-			return localId;
+		}
+
+		auto localServerId = 1;
+		const auto chooseNextServerId = [&] {
+			++localServerId;
+			while (ranges::contains(list, localServerId, &Data::ChatFilter::id)
+				|| ranges::any_of(state->rows, [&](const auto &r) { return r.filter.id() == localServerId && !r.removed; })) {
+				++localServerId;
+			}
+			return localServerId;
 		};
+
+		auto localOverflowId = Data::kLocalFilterIdThreshold - 1;
+		const auto chooseNextOverflowId = [&] {
+			++localOverflowId;
+			while (ranges::contains(list, localOverflowId, &Data::ChatFilter::id)
+				|| ranges::any_of(state->rows, [&](const auto &r) { return r.filter.id() == localOverflowId && !r.removed; })) {
+				++localOverflowId;
+			}
+			return localOverflowId;
+		};
+
 		auto result = base::flat_map<not_null<FilterRowButton*>, FilterId>();
 		for (auto &row : state->rows) {
 			const auto id = row.filter.id();
@@ -615,7 +637,12 @@ not_null<Ui::VerticalLayout*> SetupFoldersList(
 				continue;
 			} else if (!id
 				|| !ranges::contains(list, id, &Data::ChatFilter::id)) {
-				result.emplace(row.button, chooseNextId());
+				if (serverCount < serverLimit) {
+					result.emplace(row.button, chooseNextServerId());
+					++serverCount;
+				} else {
+					result.emplace(row.button, chooseNextOverflowId());
+				}
 			}
 		}
 		return result;
@@ -675,17 +702,24 @@ not_null<Ui::VerticalLayout*> SetupFoldersList(
 						MTP_inputChatlistDialogFilter(MTP_int(newId)),
 						MTP_vector<MTPInputPeer>(std::move(inputs))));
 			} else {
-				const auto request = MTPmessages_UpdateDialogFilter(
-					MTP_flags(removed
-						? MTPmessages_UpdateDialogFilter::Flag(0)
-						: MTPmessages_UpdateDialogFilter::Flag::f_filter),
-					MTP_int(newId),
-					tl);
-				if (removed) {
-					removeRequests.push_back(request);
+				const auto isLocal = Data::IsLocalFilterId(newId);
+				if (!isLocal) {
+					const auto request = MTPmessages_UpdateDialogFilter(
+						MTP_flags(removed
+							? MTPmessages_UpdateDialogFilter::Flag(0)
+							: MTPmessages_UpdateDialogFilter::Flag::f_filter),
+						MTP_int(newId),
+						tl);
+					if (removed) {
+						removeRequests.push_back(request);
+					} else {
+						addRequests.push_back(request);
+						order.push_back(newId);
+					}
 				} else {
-					addRequests.push_back(request);
-					order.push_back(newId);
+					if (!removed) {
+						order.push_back(newId);
+					}
 				}
 			}
 			updates.push_back(MTP_updateDialogFilter(
@@ -763,9 +797,10 @@ not_null<Ui::VerticalLayout*> SetupFoldersList(
 			sendRequests(removeRequests);
 			sendRequests(removeChatlistRequests);
 			sendRequests(addRequests);
-			if (!order.empty() && !addRequests.empty()) {
+			if (!order.empty()) {
 				filters->saveOrder(order, previousId);
 			}
+			AyuCloudSync::scheduleSync(session);
 			checkFinished();
 		});
 	};

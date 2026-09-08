@@ -27,6 +27,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
+#include "ayu/features/cloud_sync/cloud_folders_sync.h"
 
 
 namespace Data {
@@ -543,8 +544,12 @@ void ChatFilters::received(const QVector<MTPDialogFilter> &list) {
 		++position;
 	}
 	while (position < _list.size()) {
-		applyRemove(position);
-		changed = true;
+		if (IsLocalFilterId(_list[position].id())) {
+			++position;
+		} else {
+			applyRemove(position);
+			changed = true;
+		}
 	}
 	if (!settings.hideAllChatsFolder() && !ranges::contains(begin(_list), end(_list), 0, &ChatFilter::id)) {
 		_list.insert(begin(_list), ChatFilter());
@@ -835,15 +840,41 @@ bool ChatFilters::applyChange(ChatFilter &filter, ChatFilter &&updated) {
 	return listUpdated;
 }
 
+void ChatFilters::reorderLocally(const std::vector<FilterId> &order) {
+	if (order.empty() || _list.empty()) {
+		return;
+	}
+	auto reordered = std::vector<ChatFilter>();
+	reordered.reserve(_list.size());
+	for (const auto id : order) {
+		const auto it = ranges::find(_list, id, &ChatFilter::id);
+		if (it != end(_list)) {
+			reordered.push_back(std::move(*it));
+		}
+	}
+	for (auto &f : _list) {
+		if (f.id() && !ranges::contains(order, f.id())) {
+			reordered.push_back(std::move(f));
+		}
+	}
+	_list = std::move(reordered);
+	_listChanged.fire({});
+}
+
 bool ChatFilters::applyOrder(const QVector<MTPint> &order) {
-	if (order.size() != _list.size()) {
+	const auto serverCount = ranges::count_if(_list, [](const ChatFilter &f) {
+		return !IsLocalFilterId(f.id());
+	});
+	if (order.size() != serverCount) {
 		return false;
 	} else if (_list.empty()) {
 		return true;
 	}
 	auto indices = ranges::views::all(
 		_list
-	) | ranges::views::transform(
+	) | ranges::views::filter([](const ChatFilter &f) {
+		return !IsLocalFilterId(f.id());
+	}) | ranges::views::transform(
 		&ChatFilter::id
 	) | ranges::to_vector;
 	auto b = indices.begin(), e = indices.end();
@@ -856,20 +887,22 @@ bool ChatFilters::applyOrder(const QVector<MTPint> &order) {
 		}
 		++b;
 	}
-	auto changed = false;
-	auto begin = _list.begin(), end = _list.end();
-	for (const auto &id : order) {
-		const auto i = ranges::find(begin, end, id.v, &ChatFilter::id);
-		Assert(i != end);
-		if (i != begin) {
-			changed = true;
-			std::swap(*i, *begin);
+	auto serverFilters = std::vector<ChatFilter>();
+	auto localFilters = std::vector<ChatFilter>();
+	for (auto &f : _list) {
+		if (IsLocalFilterId(f.id())) {
+			localFilters.push_back(std::move(f));
 		}
-		++begin;
 	}
-	if (changed) {
-		_listChanged.fire({});
+	for (const auto &id : order) {
+		const auto i = ranges::find(_list, id.v, &ChatFilter::id);
+		if (i != end(_list)) {
+			serverFilters.push_back(std::move(*i));
+		}
 	}
+	serverFilters.insert(serverFilters.end(), std::make_move_iterator(localFilters.begin()), std::make_move_iterator(localFilters.end()));
+	_list = std::move(serverFilters);
+	_listChanged.fire({});
 	return true;
 }
 
@@ -914,17 +947,25 @@ void ChatFilters::saveOrder(
 	const auto api = &_owner->session().api();
 	api->request(_saveOrderRequestId).cancel();
 
+	reorderLocally(order);
+
 	auto ids = QVector<MTPint>();
 	ids.reserve(order.size());
 	for (const auto id : order) {
-		ids.push_back(MTP_int(id));
+		if (!IsLocalFilterId(id)) {
+			ids.push_back(MTP_int(id));
+		}
 	}
-	const auto wrapped = MTP_vector<MTPint>(ids);
+	if (!ids.isEmpty()) {
+		const auto wrapped = MTP_vector<MTPint>(ids);
+		_saveOrderRequestId = api->request(MTPmessages_UpdateDialogFiltersOrder(
+			wrapped
+		)).afterRequest(_saveOrderAfterId).send();
+	}
 
-	apply(MTP_updateDialogFilterOrder(wrapped));
-	_saveOrderRequestId = api->request(MTPmessages_UpdateDialogFiltersOrder(
-		wrapped
-	)).afterRequest(_saveOrderAfterId).send();
+	if (ranges::any_of(order, IsLocalFilterId)) {
+		AyuCloudSync::scheduleSync(&_owner->session());
+	}
 }
 
 bool ChatFilters::archiveNeeded() const {
