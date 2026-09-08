@@ -20,6 +20,8 @@
 #include "ayu/ui/message_history/history_section.h"
 #include "ayu/ui/settings/filters/edit_filter.h"
 #include "ayu/ui/settings/filters/settings_filters_list.h"
+#include "ayu/features/watchers/watchers_box.h"
+#include "ayu/features/watchers/watcher_edit_box.h"
 #include "ayu/utils/qt_key_modifiers_extended.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "base/call_delayed.h"
@@ -285,6 +287,13 @@ void AddAyuGramActions(PeerData *peerData,
 					},
 					&st::menuIconAddToFolder);
 			}
+			addAction(
+				QString::fromUtf8("🔔 Мониторинг ключевых слов..."),
+				[=]
+				{
+					AyuWatchers::ShowWatchersBox(sessionController, peerData);
+				},
+				&st::menuIconNotifications);
 			const auto filteredToggleShown = FiltersController::filteredMessagesShown(peerData);
 			if (filteredToggleShown) {
 				addAction(
@@ -1001,6 +1010,17 @@ void AddCreateFilterAction(not_null<Ui::PopupMenu*> menu,
 			controller->show(Settings::RegexEditBox(&filter, {}, getDialogIdFromPeer(item->history()->peer), true));
 		},
 		&st::menuIconAddToFolder);
+
+	menu->addAction(
+		QString::fromUtf8("🔔 Добавить в мониторинг..."),
+		[=]
+		{
+			AyuWatchers::ShowWatcherQuickAddBox(
+				controller,
+				selectedText,
+				item->history()->peer);
+		},
+		&st::menuIconNotifications);
 }
 
 } // namespace AyuUi

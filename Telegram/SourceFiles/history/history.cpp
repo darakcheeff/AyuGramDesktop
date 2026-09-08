@@ -85,6 +85,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 // AyuGram includes
 #include "ayu/ayu_settings.h"
 #include "ayu/ayu_state.h"
+#include "ayu/features/watchers/watchers_manager.h"
 
 
 namespace {
@@ -1667,15 +1668,16 @@ void History::newItemAdded(not_null<HistoryItem*> item, NewAddType type) {
 		from->madeAction(item->date());
 	}
 	item->contributeToSlowmode();
+	const auto watcherBypassMute = AyuWatchers::ProcessIncomingMessage(item);
 	auto notification = Data::ItemNotification{
 		.item = item,
 		.type = Data::ItemNotificationType::Message,
 	};
-	if (item->showNotification()) {
+	if (watcherBypassMute || item->showNotification()) {
 		item->notificationThread()->pushNotification(notification);
 	}
 	owner().notifyNewItemAdded(item);
-	const auto stillShow = item->showNotification(); // Could be read already.
+	const auto stillShow = watcherBypassMute || item->showNotification(); // Could be read already.
 	if (stillShow) {
 		Core::App().notifications().schedule(notification);
 	}

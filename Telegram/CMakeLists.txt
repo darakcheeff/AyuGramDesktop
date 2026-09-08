@@ -163,6 +163,13 @@ set(ayugram_files
         ayu/ui/settings/filters/per_dialog_filter.h
         ayu/ui/settings/filters/edit_filter.cpp
         ayu/ui/settings/filters/edit_filter.h
+        ayu/features/watchers/watcher_rule.h
+        ayu/features/watchers/watchers_manager.h
+        ayu/features/watchers/watchers_manager.cpp
+        ayu/features/watchers/watcher_edit_box.h
+        ayu/features/watchers/watcher_edit_box.cpp
+        ayu/features/watchers/watchers_box.h
+        ayu/features/watchers/watchers_box.cpp
         ayu/ui/context_menu/context_menu.cpp
         ayu/ui/context_menu/context_menu.h
         ayu/ui/context_menu/menu_item_subtext.cpp

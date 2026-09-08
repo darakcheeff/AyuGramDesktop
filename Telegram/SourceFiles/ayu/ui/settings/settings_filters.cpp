@@ -18,6 +18,7 @@
 #include "boxes/peer_list_box.h"
 #include "core/application.h"
 #include "filters/per_dialog_filter.h"
+#include "ayu/features/watchers/watchers_box.h"
 #include "filters/settings_filters_list.h"
 #include "inline_bots/bot_attach_web_view.h"
 #include "settings/settings_builder.h"
@@ -138,6 +139,22 @@ void BuildShadowBan(SectionBuilder &builder) {
 	});
 }
 
+void BuildWatchers(SectionBuilder &builder) {
+	builder.addDivider();
+	builder.addSkip();
+	builder.addSubsectionTitle(rpl::single(QString::fromUtf8("Мониторинг ключевых слов")));
+
+	const auto controller = builder.controller();
+	builder.addButton({
+		.id = u"ayu/watchers"_q,
+		.title = rpl::single(QString::fromUtf8("Правила отслеживания (Watchers)")),
+		.st = &st::settingsButtonNoIcon,
+		.onClick = [=] {
+			AyuWatchers::ShowWatchersBox(controller);
+		},
+	});
+}
+
 void BuildPerDialog(SectionBuilder &builder) {
 	builder.add([](const BuildContext &ctx) {
 		v::match(ctx, [&](const WidgetContext &wctx) {
@@ -179,6 +196,7 @@ const auto kMeta = BuildHelper({
 	.icon = &st::menuIconTagFilter,
 }, [](SectionBuilder &builder) {
 	BuildFiltersSettings(builder);
+	BuildWatchers(builder);
 	BuildShared(builder);
 	BuildShadowBan(builder);
 	BuildPerDialog(builder);

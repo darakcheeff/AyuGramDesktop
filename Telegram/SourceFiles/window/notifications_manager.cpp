@@ -56,6 +56,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 // AyuGram includes
 #include "ayu/ayu_settings.h"
 #include "ayu/utils/telegram_helpers.h"
+#include "ayu/features/watchers/watchers_manager.h"
 
 
 namespace Window {
@@ -360,6 +361,13 @@ System::SkipState System::computeSkipState(
 	} else if (!Core::App().settings().notifyFromAll()
 		&& &thread->session().account() != &Core::App().domain().active()) {
 		return { SkipState::Skip };
+	}
+
+	if (messageType && AyuWatchers::ShouldBypassMute(item)) {
+		return SkipState{
+			.value = SkipState::DontSkip,
+			.silent = false,
+		};
 	}
 
 	if (messageType) {
