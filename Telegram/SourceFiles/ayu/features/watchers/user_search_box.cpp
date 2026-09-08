@@ -162,14 +162,12 @@ void ShowUserGlobalSearchBox(
 							const auto msgId = m.vid().v;
 							const auto date = m.vdate().v;
 							const auto text = qs(m.vmessage()).trimmed();
-							const auto preview = text.isEmpty()
+							auto preview = text.isEmpty()
 								? QString::fromUtf8("[Медиасообщение]")
-								: text.left(100).replace(u"
-"_q, u" "_q);
+								: text.left(100).replace('\n', ' ');
 
 							const auto timeStr = QDateTime::fromSecsSinceEpoch(date).toString("dd.MM.yy HH:mm");
-							const auto btnText = peer->name() + u" ("_q + timeStr + u")
-"_q + preview;
+							const auto btnText = peer->name() + u" ("_q + timeStr + u"): "_q + preview;
 
 							const auto itemBtn = resultsContainer->add(
 								object_ptr<Ui::SettingsButton>(

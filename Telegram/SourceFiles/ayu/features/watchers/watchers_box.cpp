@@ -95,8 +95,7 @@ void ShowWatchersBox(
 				}
 
 				const auto displayTitle = rule.title.isEmpty() ? rule.regex : rule.title;
-				const auto buttonText = displayTitle + u"
-"_q + tags.join(u" | "_q);
+				const auto buttonText = tags.isEmpty() ? displayTitle : (displayTitle + u" ("_q + tags.join(u" | "_q) + u")"_q);
 
 				const auto btn = content->add(
 					object_ptr<Ui::SettingsButton>(
