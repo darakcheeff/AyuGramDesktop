@@ -6,6 +6,8 @@
 // Copyright @Radolyn, 2026
 #pragma once
 
+class AyuMessageBase;
+
 namespace AyuMapper {
 
 template<typename MTPObject>
@@ -17,7 +19,6 @@ template<typename MTPObject>
 std::pair<std::string, std::vector<char>> serializeTextWithEntities(not_null<HistoryItem*> item);
 [[nodiscard]] MTPVector<MTPMessageEntity> deserializeTextWithEntities(std::vector<char> serialized);
 int mapItemFlagsToMTPFlags(not_null<HistoryItem*> item);
-class AyuMessageBase;
 [[nodiscard]] MTPMessage toMTPMessage(const AyuMessageBase &m);
 
 } // namespace AyuMapper
