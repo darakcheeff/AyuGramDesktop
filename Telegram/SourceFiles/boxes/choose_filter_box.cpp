@@ -387,9 +387,6 @@ void FillChooseFilterMenu(
 			}
 			const auto session = &strong->session();
 			const auto &list = session->data().chatsFilters().list();
-			if ((list.size() - 1) >= limit()) {
-				return;
-			}
 			const auto chooseNextId = [=] {
 				const auto serverLimit = Data::PremiumLimits(session).dialogFiltersServerLimit();
 				const auto serverCount = ranges::count_if(list, [](const auto &f) {

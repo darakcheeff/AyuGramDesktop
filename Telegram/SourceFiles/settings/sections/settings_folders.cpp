@@ -382,15 +382,7 @@ not_null<Ui::VerticalLayout*> SetupFoldersList(
 		return &*i;
 	};
 	const auto showLimitReached = [=] {
-		const auto removed = ranges::count_if(
-			state->rows,
-			&FilterRow::removed);
-		const auto count = int(state->rows.size() - removed);
-		if (count < limit()) {
-			return false;
-		}
-		controller->show(Box(FiltersLimitBox, session, count));
-		return true;
+		return false;
 	};
 	const auto markForRemovalSure = [=](not_null<FilterRowButton*> button) {
 		const auto row = find(button);
@@ -488,6 +480,7 @@ not_null<Ui::VerticalLayout*> SetupFoldersList(
 			const auto doneCallback = [=](const Data::ChatFilter &result) {
 				find(button)->filter = result;
 				button->updateData(result);
+				state->save(button, nullptr);
 			};
 			const auto saveAnd = [=](
 					const Data::ChatFilter &data,
@@ -583,6 +576,7 @@ not_null<Ui::VerticalLayout*> SetupFoldersList(
 			} else {
 				*created = addFilter(result);
 			}
+			state->save(*created, nullptr);
 		};
 		const auto saveAnd = [=](
 				const Data::ChatFilter &data,
@@ -820,15 +814,7 @@ void SetupRecommendedSection(
 	};
 
 	const auto showLimitReached = [=] {
-		const auto removed = ranges::count_if(
-			state->rows,
-			&FilterRow::removed);
-		const auto count = int(state->rows.size() - removed);
-		if (count < limit()) {
-			return false;
-		}
-		controller->show(Box(FiltersLimitBox, session, count));
-		return true;
+		return false;
 	};
 
 	const auto find = [=](not_null<FilterRowButton*> button) {
@@ -947,6 +933,7 @@ void SetupRecommendedSection(
 				addFilter(filter);
 				state->suggested = state->suggested.current() - 1;
 				delete button;
+				state->save(nullptr, nullptr);
 			}, button->lifetime());
 		}
 		aboutRows->resizeToWidth(container->width());
@@ -958,7 +945,7 @@ void SetupRecommendedSection(
 		state->count.value(),
 		Data::AmPremiumValue(session)
 	) | rpl::map([limit](int suggested, int count, bool) {
-		return suggested > 0 && count < limit();
+		return suggested > 0;
 	});
 	nonEmptyAbout->toggleOn(std::move(showSuggestions));
 }
@@ -1274,7 +1261,7 @@ Folders::Folders(
 }
 
 Folders::~Folders() {
-	if (!Core::Quitting() && _state->save) {
+	if (_state->save) {
 		_state->save(nullptr, nullptr);
 	}
 }
