@@ -12,7 +12,11 @@
 #include "data/data_chat.h"
 #include "data/data_channel.h"
 #include "data/data_session.h"
+#include "data/data_histories.h"
+#include "history/history.h"
+#include "dialogs/dialogs_key.h"
 #include "main/main_session.h"
+#include "mtproto/sender.h"
 #include "apiwrap.h"
 #include "lang/lang_keys.h"
 #include "lang_auto.h"
@@ -37,13 +41,12 @@ void ShowUserGlobalSearchBox(
 		PeerData *currentChat) {
 	controller->show(Box([=](not_null<Ui::GenericBox*> box) {
 		const auto userName = user->name();
-		const auto userHandle = user->username().isEmpty() ? QString() : (u" (@"_q + user->username() + u")"_q);
-		box->setTitle(rpl::single(QString::fromUtf8("Сообщения: ") + userName));
+		box->setTitle(rpl::single(QString::fromUtf8("Сообщения пользователя: ") + userName));
 
 		const auto content = box->verticalLayout();
 
 		// Action Buttons at top
-		if (currentChat) {
+		if (currentChat && !currentChat->isUser()) {
 			const auto inCurrentBtn = content->add(
 				object_ptr<Ui::SettingsButton>(
 					content,
@@ -77,28 +80,31 @@ void ShowUserGlobalSearchBox(
 				st::boxLabel),
 			st::settingsCheckboxPadding);
 
-		const auto resultsContainer = content->add(
+		const auto chatsContainer = content->add(
+			object_ptr<Ui::VerticalLayout>(content));
+
+		const auto messagesContainer = content->add(
 			object_ptr<Ui::VerticalLayout>(content));
 
 		box->addButton(tr::lng_close(), [=] { box->closeBox(); });
 
-		// Structure for results state
 		struct State {
 			int totalMessages = 0;
 			int searchedChats = 0;
 			int totalChats = 0;
+			bool headerAdded = false;
 		};
 		const auto state = box->lifetime().make_state<State>();
 
-		auto &api = controller->session().api();
-		auto &session = controller->session();
+		const auto session = &controller->session();
+		const auto api = box->lifetime().make_state<MTP::Sender>(&session->mtp());
 
 		// 1. Fetch common chats
-		api.request(MTPmessages_GetCommonChats(
+		api->request(MTPmessages_GetCommonChats(
 			user->inputUser(),
 			MTP_long(0),
 			MTP_int(100)
-		)).done([=, &api, &session](const MTPmessages_Chats &chatsResult) {
+		)).done([=](const MTPmessages_Chats &chatsResult) {
 			const auto &chats = chatsResult.match([&](const MTPDmessages_chats &data) {
 				return data.vchats().v;
 			}, [&](const MTPDmessages_chatsSlice &data) {
@@ -110,9 +116,11 @@ void ShowUserGlobalSearchBox(
 				targetPeers.push_back(currentChat);
 			}
 			for (const auto &c : chats) {
-				const auto p = session.data().processChat(c);
-				if (!ranges::contains(targetPeers, p)) {
-					targetPeers.push_back(p);
+				if (const auto p = session->data().processChat(c)) {
+					const auto actualPeer = p->migrateTo() ? p->migrateTo() : p;
+					if (!ranges::contains(targetPeers, actualPeer)) {
+						targetPeers.push_back(actualPeer);
+					}
 				}
 			}
 
@@ -121,31 +129,53 @@ void ShowUserGlobalSearchBox(
 				return;
 			}
 
-			state->totalChats = std::min(int(targetPeers.size()), 20);
-			statusLabel->setText(QString::fromUtf8("⏳ Поиск в %1 чатах...").arg(state->totalChats));
+			// Add common chats buttons for direct 1-click in-chat search
+			chatsContainer->add(
+				object_ptr<Ui::FlatLabel>(
+					chatsContainer,
+					QString::fromUtf8("Общие группы (%1):").arg(targetPeers.size()),
+					st::boxLabel),
+				st::settingsCheckboxPadding);
 
-			// 2. Query search in each peer (limit to first 20 peers)
+			for (const auto peer : targetPeers) {
+				const auto openChatBtn = chatsContainer->add(
+					object_ptr<Ui::SettingsButton>(
+						chatsContainer,
+						rpl::single(QString::fromUtf8("💬 ") + peer->name() + QString::fromUtf8(" — открыть поиск автора")),
+						st::settingsButtonNoIcon));
+				openChatBtn->setClickedCallback([=] {
+					box->closeBox();
+					const auto key = Dialogs::Key{peer->owner().history(peer)};
+					controller->searchInChat(key, user);
+				});
+			}
+
+			state->totalChats = std::min(int(targetPeers.size()), 20);
+			statusLabel->setText(QString::fromUtf8("⏳ Поиск сообщений в %1 чатах...").arg(state->totalChats));
+
+			// 2. Query search in each peer
 			for (int i = 0; i < state->totalChats; ++i) {
 				const auto peer = targetPeers[i];
-				const auto flags = MTP_flags(MTPmessages_Search::Flag::f_from_id);
+				using Flag = MTPmessages_Search::Flag;
+				const auto flags = MTP_flags(Flag::f_from_id);
 
-				api.request(MTPmessages_Search(
+				api->request(MTPmessages_Search(
 					flags,
 					peer->input(),
 					MTP_string(""),
 					user->input(),
-					MTPInputPeer(),
+					MTP_inputPeerEmpty(),
 					MTPVector<MTPReaction>(),
-					MTPint(),
+					MTP_int(0), // top_msg_id
 					MTP_inputMessagesFilterEmpty(),
-					MTP_int(0),
-					MTP_int(0),
-					MTP_int(0),
-					MTP_int(0),
-					MTP_int(15), // 15 per chat
-					MTP_int(0),
-					MTP_int(0),
-					MTP_long(0)
+					MTP_int(0), // min_date
+					MTP_int(0), // max_date
+					MTP_int(0), // offset_id
+					MTP_int(0), // add_offset
+					MTP_int(20), // limit
+					MTP_int(0), // max_id
+					MTP_int(0), // min_id
+					MTP_long(0) // hash
 				)).done([=](const MTPmessages_Messages &res) {
 					state->searchedChats++;
 
@@ -158,6 +188,16 @@ void ShowUserGlobalSearchBox(
 
 					for (const auto &msg : msgs) {
 						msg.match([&](const MTPDmessage &m) {
+							if (!state->headerAdded) {
+								state->headerAdded = true;
+								messagesContainer->add(
+									object_ptr<Ui::FlatLabel>(
+										messagesContainer,
+										QString::fromUtf8("Найденные сообщения:"),
+										st::boxLabel),
+									st::settingsCheckboxPadding);
+							}
+
 							state->totalMessages++;
 							const auto msgId = m.vid().v;
 							const auto date = m.vdate().v;
@@ -169,9 +209,9 @@ void ShowUserGlobalSearchBox(
 							const auto timeStr = QDateTime::fromSecsSinceEpoch(date).toString("dd.MM.yy HH:mm");
 							const auto btnText = peer->name() + u" ("_q + timeStr + u"): "_q + preview;
 
-							const auto itemBtn = resultsContainer->add(
+							const auto itemBtn = messagesContainer->add(
 								object_ptr<Ui::SettingsButton>(
-									resultsContainer,
+									messagesContainer,
 									rpl::single(btnText),
 									st::settingsButtonNoIcon));
 
@@ -184,21 +224,24 @@ void ShowUserGlobalSearchBox(
 						});
 					}
 
-					statusLabel->setText(QString::fromUtf8("Найдено сообщений: %1 (проверено чатов: %2/%3)")
-						.arg(state->totalMessages)
-						.arg(state->searchedChats)
-						.arg(state->totalChats));
+					if (state->totalMessages > 0) {
+						statusLabel->setText(QString::fromUtf8("Найдено сообщений: %1 (проверено чатов: %2/%3)")
+							.arg(state->totalMessages)
+							.arg(state->searchedChats)
+							.arg(state->totalChats));
+					} else if (state->searchedChats >= state->totalChats) {
+						statusLabel->setText(QString::fromUtf8("Сообщений в проверенных чатах не найдено. Нажмите на чат выше для ручного поиска."));
+					}
 				}).fail([=](const MTP::Error &) {
 					state->searchedChats++;
-					statusLabel->setText(QString::fromUtf8("Найдено сообщений: %1 (проверено чатов: %2/%3)")
-						.arg(state->totalMessages)
-						.arg(state->searchedChats)
-						.arg(state->totalChats));
-				});
+					if (state->searchedChats >= state->totalChats && state->totalMessages == 0) {
+						statusLabel->setText(QString::fromUtf8("Проверено чатов: %1. Сообщений не найдено. Нажмите на чат выше для перехода.").arg(state->totalChats));
+					}
+				}).send();
 			}
 		}).fail([=](const MTP::Error &e) {
 			statusLabel->setText(QString::fromUtf8("Не удалось загрузить список общих чатов."));
-		});
+		}).send();
 	}));
 }
 
