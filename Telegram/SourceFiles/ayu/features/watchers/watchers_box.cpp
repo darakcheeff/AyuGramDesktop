@@ -76,6 +76,9 @@ void ShowWatchersBox(
 		} else {
 			for (const auto &rule : rules) {
 				QStringList tags;
+				if (rule.senderUserId != 0) {
+					tags << (rule.senderName.isEmpty() ? QString::fromUtf8("👤 Автор") : (u"👤 "_q + rule.senderName));
+				}
 				if (rule.notifyBypassMute) tags << QString::fromUtf8("🔔 Звук");
 				if (rule.forwardToChat) tags << QString::fromUtf8("💬 В Избранное");
 				if (rule.sendWebhook) tags << QString::fromUtf8("🌐 Webhook");

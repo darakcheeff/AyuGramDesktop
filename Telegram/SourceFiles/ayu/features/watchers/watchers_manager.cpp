@@ -219,7 +219,7 @@ void Manager::load() {
 			for (const auto &rj : j["rules"]) {
 				WatcherRule r;
 				from_json(rj, r);
-				if (!r.id.isEmpty() && !r.regex.isEmpty()) {
+				if (!r.id.isEmpty() && (!r.regex.isEmpty() || r.senderUserId != 0)) {
 					_rules.push_back(std::move(r));
 				}
 			}
@@ -318,6 +318,8 @@ bool ProcessIncomingMessage(not_null<HistoryItem*> item) {
 	}
 
 	const auto peerId = item->history()->peer->id.value;
+	const auto from = item->from();
+	const auto fromUserId = from ? from->id.value : 0;
 	bool bypassMute = false;
 	bool saveNeeded = false;
 
@@ -328,17 +330,30 @@ bool ProcessIncomingMessage(not_null<HistoryItem*> item) {
 		if (r.peerId != 0 && r.peerId != peerId) {
 			continue;
 		}
-		QRegularExpression re(
-			r.regex,
-			r.caseInsensitive
-				? QRegularExpression::CaseInsensitiveOption
-				: QRegularExpression::NoPatternOption);
-		if (!re.isValid()) {
+		if (r.senderUserId != 0 && r.senderUserId != fromUserId) {
 			continue;
 		}
-		const auto match = re.match(text);
-		if (!match.hasMatch()) {
-			continue;
+
+		QString matchedText;
+		if (!r.regex.trimmed().isEmpty()) {
+			QRegularExpression re(
+				r.regex,
+				r.caseInsensitive
+					? QRegularExpression::CaseInsensitiveOption
+					: QRegularExpression::NoPatternOption);
+			if (!re.isValid()) {
+				continue;
+			}
+			const auto match = re.match(text);
+			if (!match.hasMatch()) {
+				continue;
+			}
+			matchedText = match.captured(0);
+		} else {
+			if (r.senderUserId == 0) {
+				continue;
+			}
+			matchedText = text.left(100);
 		}
 
 		if (r.trackCounter) {
@@ -354,7 +369,7 @@ bool ProcessIncomingMessage(not_null<HistoryItem*> item) {
 			DispatchForwardAlert(r, item);
 		}
 		if (r.sendWebhook) {
-			DispatchWebhook(r, item, match.captured(0));
+			DispatchWebhook(r, item, matchedText);
 		}
 	}
 

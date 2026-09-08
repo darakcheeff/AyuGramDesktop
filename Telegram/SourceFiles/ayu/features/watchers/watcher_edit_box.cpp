@@ -8,6 +8,7 @@
 #include "ayu/features/watchers/watchers_manager.h"
 
 #include "data/data_peer.h"
+#include "data/data_user.h"
 #include "data/data_channel.h"
 #include "lang/lang_keys.h"
 #include "lang_auto.h"
@@ -36,27 +37,57 @@ void ShowWatcherEditBox(
 		Fn<void(WatcherRule)> onSave) {
 	controller->show(Box([=](not_null<Ui::GenericBox*> box) {
 		const auto isNew = rule.id.isEmpty();
-		box->setTitle(rpl::single(isNew
-			? QString::fromUtf8("Добавить правило мониторинга")
-			: QString::fromUtf8("Редактировать правило")));
+		const auto hasUser = (rule.senderUserId != 0);
+
+		QString boxTitle;
+		if (hasUser) {
+			boxTitle = isNew
+				? QString::fromUtf8("Подписка на автора")
+				: QString::fromUtf8("Редактировать подписку");
+		} else {
+			boxTitle = isNew
+				? QString::fromUtf8("Добавить правило мониторинга")
+				: QString::fromUtf8("Редактировать правило");
+		}
+		box->setTitle(rpl::single(boxTitle));
 
 		const auto content = box->verticalLayout();
 
+		// Author Info Banner (if rule is bound to a user)
+		if (hasUser) {
+			const auto authorInfo = QString::fromUtf8("👤 Автор: ")
+				+ (rule.senderName.isEmpty() ? QString::number(rule.senderUserId) : rule.senderName)
+				+ (rule.senderUsername.isEmpty() ? QString() : (u" (@"_q + rule.senderUsername + u")"_q));
+
+			box->addRow(
+				object_ptr<Ui::FlatLabel>(
+					content,
+					authorInfo,
+					st::boxLabel),
+				st::settingsCheckboxPadding);
+		}
+
 		// Rule Title
+		const auto titlePlaceholder = hasUser
+			? QString::fromUtf8("Название подписки (напр. Посты ") + rule.senderName + u")"_q
+			: QString::fromUtf8("Название правила (напр. Важное, Крипта)");
 		const auto titleField = box->addRow(
 			object_ptr<Ui::InputField>(
 				content,
 				st::defaultInputField,
-				rpl::single(QString::fromUtf8("Название правила (напр. Важное)")),
+				rpl::single(titlePlaceholder),
 				rule.title),
 			st::settingsCheckboxPadding);
 
 		// Regex Pattern
+		const auto regexPlaceholder = hasUser
+			? QString::fromUtf8("Фильтр слов (необязательно, оставьте пустым для всех постов)")
+			: QString::fromUtf8("Ключевые слова или Regex (напр. биткоин|btc|eth)");
 		const auto regexField = box->addRow(
 			object_ptr<Ui::InputField>(
 				content,
 				st::defaultInputField,
-				rpl::single(QString::fromUtf8("Ключевые слова или Regex (напр. биткоин|btc|eth)")),
+				rpl::single(regexPlaceholder),
 				rule.regex),
 			st::settingsCheckboxPadding);
 
@@ -191,33 +222,40 @@ void ShowWatcherEditBox(
 		}, sendWebhook->lifetime());
 
 		// Save handler
-		auto saveAndClose = [=, rId = rule.id, pId = rule.peerId, pName = rule.peerName, count = rule.matchCount]() mutable {
+		auto saveAndClose = [=, rId = rule.id, pId = rule.peerId, pName = rule.peerName, count = rule.matchCount, sId = rule.senderUserId, sUser = rule.senderUsername, sName = rule.senderName]() mutable {
 			const auto rxText = regexField->getTextWithTags().text.trimmed();
-			if (rxText.isEmpty()) {
+			if (rxText.isEmpty() && sId == 0) {
 				errorWrap->entity()->setText(QString::fromUtf8("Введите ключевые слова или регулярное выражение"));
 				errorWrap->show(anim::type::normal);
 				return;
 			}
-			QRegularExpression testRx(
-				rxText,
-				caseInsensitive->checked()
-					? QRegularExpression::CaseInsensitiveOption
-					: QRegularExpression::NoPatternOption);
-			if (!testRx.isValid()) {
-				errorWrap->entity()->setText(QString::fromUtf8("Синтаксис regex невалиден: ") + testRx.errorString());
-				errorWrap->show(anim::type::normal);
-				return;
+			if (!rxText.isEmpty()) {
+				QRegularExpression testRx(
+					rxText,
+					caseInsensitive->checked()
+						? QRegularExpression::CaseInsensitiveOption
+						: QRegularExpression::NoPatternOption);
+				if (!testRx.isValid()) {
+					errorWrap->entity()->setText(QString::fromUtf8("Синтаксис regex невалиден: ") + testRx.errorString());
+					errorWrap->show(anim::type::normal);
+					return;
+				}
 			}
 
 			WatcherRule result;
 			result.id = rId.isEmpty() ? QString::number(QDateTime::currentMSecsSinceEpoch()) : rId;
 			result.title = titleField->getTextWithTags().text.trimmed();
 			if (result.title.isEmpty()) {
-				result.title = rxText;
+				result.title = !rxText.isEmpty()
+					? rxText
+					: (QString::fromUtf8("Посты: ") + (sName.isEmpty() ? QString::number(sId) : sName));
 			}
 			result.regex = rxText;
 			result.enabled = true;
 			result.caseInsensitive = caseInsensitive->checked();
+			result.senderUserId = sId;
+			result.senderUsername = sUser;
+			result.senderName = sName;
 			if (peerScope) {
 				result.peerId = peerScope->checked() ? pId : 0;
 				result.peerName = peerScope->checked() ? pName : QString();
@@ -266,6 +304,27 @@ void ShowWatcherQuickAddBox(
 	WatcherRule r;
 	r.title = selectedText.trimmed().left(30);
 	r.regex = QRegularExpression::escape(selectedText.trimmed());
+	if (peer) {
+		r.peerId = peer->id.value;
+		r.peerName = peer->name();
+	}
+	r.notifyBypassMute = true;
+	r.forwardToChat = false;
+	r.trackCounter = true;
+	r.sendWebhook = false;
+
+	ShowWatcherEditBox(controller, r);
+}
+
+void ShowUserWatcherSubscribeBox(
+		not_null<Window::SessionController*> controller,
+		not_null<UserData*> user,
+		PeerData *peer) {
+	WatcherRule r;
+	r.title = QString::fromUtf8("Посты: ") + user->name();
+	r.senderUserId = user->id.value;
+	r.senderUsername = user->username();
+	r.senderName = user->name();
 	if (peer) {
 		r.peerId = peer->id.value;
 		r.peerName = peer->name();

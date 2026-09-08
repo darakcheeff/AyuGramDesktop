@@ -22,6 +22,7 @@
 #include "ayu/ui/settings/filters/settings_filters_list.h"
 #include "ayu/features/watchers/watchers_box.h"
 #include "ayu/features/watchers/watcher_edit_box.h"
+#include "ayu/features/watchers/user_search_box.h"
 #include "ayu/utils/qt_key_modifiers_extended.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "base/call_delayed.h"
@@ -262,7 +263,7 @@ void AddAyuGramActions(PeerData *peerData,
 	const auto showFilters = settings.filtersEnabled()
 		&& (!user || user->isBot());
 	const auto saveDeletedMessages = settings.saveDeletedMessages();
-	if (!showFilters && !saveDeletedMessages) {
+	if (!showFilters && !saveDeletedMessages && !user) {
 		return;
 	}
 
@@ -294,6 +295,22 @@ void AddAyuGramActions(PeerData *peerData,
 					AyuWatchers::ShowWatchersBox(sessionController, peerData);
 				},
 				&st::menuIconNotifications);
+			if (user) {
+				addAction(
+					QString::fromUtf8("🌐 Найти сообщения в общих чатах..."),
+					[=]
+					{
+						AyuWatchers::ShowUserGlobalSearchBox(sessionController, user);
+					},
+					&st::menuIconSearch);
+				addAction(
+					QString::fromUtf8("👤 Подписаться на посты пользователя..."),
+					[=]
+					{
+						AyuWatchers::ShowUserWatcherSubscribeBox(sessionController, user);
+					},
+					&st::menuIconNotifications);
+			}
 			const auto filteredToggleShown = FiltersController::filteredMessagesShown(peerData);
 			if (filteredToggleShown) {
 				addAction(
@@ -551,31 +568,50 @@ void AddHideMessageAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
 }
 
 void AddUserMessagesAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
-	const auto &settings = AyuSettings::getInstance();
-	if (!needToShowItem(settings.showUserMessagesInContextMenu())) {
+	if (!item || !item->isHistoryEntry()) {
+		return;
+	}
+	const auto from = item->from();
+	if (!from) {
 		return;
 	}
 
-	if (!item->isHistoryEntry()) {
-		return;
-	}
+	menu->addAction(
+		QString::fromUtf8("🔍 Сообщения автора в этом чате"),
+		[=]
+		{
+			if (const auto controller = item->history()->session().tryResolveWindow()) {
+				const auto peer = item->history()->peer;
+				const auto key = (peer && !peer->isUser())
+									 ? item->topic()
+										   ? Dialogs::Key{item->topic()}
+										   : Dialogs::Key{item->history()}
+									 : Dialogs::Key{item->history()};
+				controller->searchInChat(key, item->from());
+			}
+		},
+		&st::menuIconSearch);
 
-	if (item->history()->peer->isChat() || item->history()->peer->isMegagroup()) {
+	if (const auto fromUser = from->asUser()) {
 		menu->addAction(
-			tr::ayu_UserMessagesMenuText(tr::now),
+			QString::fromUtf8("🌐 Сообщения автора во всех общих чатах..."),
 			[=]
 			{
 				if (const auto controller = item->history()->session().tryResolveWindow()) {
-					const auto peer = item->history()->peer;
-					const auto key = (peer && !peer->isUser())
-										 ? item->topic()
-											   ? Dialogs::Key{item->topic()}
-											   : Dialogs::Key{item->history()}
-										 : Dialogs::Key{item->history()};
-					controller->searchInChat(key, item->from());
+					AyuWatchers::ShowUserGlobalSearchBox(controller, fromUser, item->history()->peer);
 				}
 			},
-			&st::menuIconTTL);
+			&st::menuIconSearch);
+
+		menu->addAction(
+			QString::fromUtf8("👤 Подписаться на посты автора..."),
+			[=]
+			{
+				if (const auto controller = item->history()->session().tryResolveWindow()) {
+					AyuWatchers::ShowUserWatcherSubscribeBox(controller, fromUser, item->history()->peer);
+				}
+			},
+			&st::menuIconNotifications);
 	}
 }
 

@@ -20,6 +20,11 @@ struct WatcherRule {
 	uint64 peerId = 0; // 0 = all chats/global
 	QString peerName;
 
+	// User target
+	uint64 senderUserId = 0; // 0 = any sender
+	QString senderUsername;
+	QString senderName;
+
 	// Actions
 	bool notifyBypassMute = true;
 	bool forwardToChat = false;
@@ -39,6 +44,9 @@ inline void to_json(nlohmann::json &j, const WatcherRule &r) {
 		{"caseInsensitive", r.caseInsensitive},
 		{"peerId", r.peerId},
 		{"peerName", r.peerName.toStdString()},
+		{"senderUserId", r.senderUserId},
+		{"senderUsername", r.senderUsername.toStdString()},
+		{"senderName", r.senderName.toStdString()},
 		{"notifyBypassMute", r.notifyBypassMute},
 		{"forwardToChat", r.forwardToChat},
 		{"forwardTargetId", r.forwardTargetId},
@@ -57,6 +65,9 @@ inline void from_json(const nlohmann::json &j, WatcherRule &r) {
 	r.caseInsensitive = j.value("caseInsensitive", true);
 	r.peerId = j.value("peerId", uint64(0));
 	r.peerName = QString::fromStdString(j.value("peerName", ""));
+	r.senderUserId = j.value("senderUserId", uint64(0));
+	r.senderUsername = QString::fromStdString(j.value("senderUsername", ""));
+	r.senderName = QString::fromStdString(j.value("senderName", ""));
 	r.notifyBypassMute = j.value("notifyBypassMute", true);
 	r.forwardToChat = j.value("forwardToChat", false);
 	r.forwardTargetId = j.value("forwardTargetId", uint64(0));

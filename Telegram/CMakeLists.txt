@@ -170,6 +170,8 @@ set(ayugram_files
         ayu/features/watchers/watcher_edit_box.cpp
         ayu/features/watchers/watchers_box.h
         ayu/features/watchers/watchers_box.cpp
+        ayu/features/watchers/user_search_box.h
+        ayu/features/watchers/user_search_box.cpp
         ayu/ui/context_menu/context_menu.cpp
         ayu/ui/context_menu/context_menu.h
         ayu/ui/context_menu/menu_item_subtext.cpp

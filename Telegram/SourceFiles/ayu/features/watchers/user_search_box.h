@@ -6,7 +6,6 @@
 // Copyright @Radolyn, 2026
 #pragma once
 
-#include "ayu/features/watchers/watcher_rule.h"
 #include "base/basic_types.h"
 
 class PeerData;
@@ -18,19 +17,9 @@ class SessionController;
 
 namespace AyuWatchers {
 
-void ShowWatcherEditBox(
-	not_null<Window::SessionController*> controller,
-	WatcherRule rule,
-	Fn<void(WatcherRule)> onSave = nullptr);
-
-void ShowWatcherQuickAddBox(
-	not_null<Window::SessionController*> controller,
-	const QString &selectedText,
-	PeerData *peer = nullptr);
-
-void ShowUserWatcherSubscribeBox(
+void ShowUserGlobalSearchBox(
 	not_null<Window::SessionController*> controller,
 	not_null<UserData*> user,
-	PeerData *peer = nullptr);
+	PeerData *currentChat = nullptr);
 
 } // namespace AyuWatchers
