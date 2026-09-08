@@ -27,11 +27,13 @@ jobs:
       - name: Setup Workspace Cache
         uses: actions/cache@v4
         with:
-          path: .ccache
-          key: ccache-linux-${{ github.run_id }}
+          path: |
+            .ccache
+            out
+          key: build-cache-linux-${{ github.run_id }}
           restore-keys: |
-            ccache-linux-
             build-cache-linux-
+            ccache-linux-
 
       - name: Patch Build Dependencies
         run: |
@@ -60,7 +62,7 @@ jobs:
 
       - name: Build AyuGram Binary
         run: |
-          mkdir -p .ccache
+          mkdir -p .ccache out
           docker run --rm \
             -u $(id -u) \
             -v "$GITHUB_WORKSPACE:/usr/src/tdesktop" \
@@ -75,13 +77,13 @@ jobs:
             -e CCACHE_COMPILERCHECK=none \
             ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
             /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
-            -D CMAKE_C_COMPILER_LAUNCHER=ccache \
-            -D CMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -D DESKTOP_APP_DISABLE_QT_PLUGINS=ON \
-            -D TDESKTOP_API_ID=2040 \
-            -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627 \
-            -D TDESKTOP_DISABLE_AUTOUPDATE=ON \
-            -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DDESKTOP_APP_DISABLE_QT_PLUGINS=ON \
+            -DTDESKTOP_API_ID=2040 \
+            -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627 \
+            -DTDESKTOP_DISABLE_AUTOUPDATE=ON \
+            -DDESKTOP_APP_DISABLE_CRASH_REPORTS=ON
 
       - name: Strip & Package Binary
         run: |
