@@ -391,7 +391,7 @@ void FillChooseFilterMenu(
 				return;
 			}
 			const auto chooseNextId = [=] {
-				const auto serverLimit = session->data().premiumLimits().dialogFiltersServerLimit();
+				const auto serverLimit = Data::PremiumLimits(session).dialogFiltersServerLimit();
 				const auto serverCount = ranges::count_if(list, [](const auto &f) {
 					return f.id() > 0 && !Data::IsLocalFilterId(f.id());
 				});

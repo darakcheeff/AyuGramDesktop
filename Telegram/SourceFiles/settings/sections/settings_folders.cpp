@@ -600,7 +600,7 @@ not_null<Ui::VerticalLayout*> SetupFoldersList(
 
 	const auto prepareGoodIdsForNewFilters = [=] {
 		const auto &list = session->data().chatsFilters().list();
-		const auto serverLimit = session->data().premiumLimits().dialogFiltersServerLimit();
+		const auto serverLimit = Data::PremiumLimits(session).dialogFiltersServerLimit();
 
 		auto serverCount = 0;
 		for (const auto &row : state->rows) {
