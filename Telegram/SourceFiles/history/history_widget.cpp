@@ -4623,17 +4623,19 @@ void HistoryWidget::messagesFailed(const MTP::Error &error, int requestId) {
 		_preloadDownRequest = 0;
 	} else if (_firstLoadRequest == requestId) {
 		_firstLoadRequest = 0;
-		const auto local = AyuMessages::getLocalMTPMessages(_peer, _topic ? _topic->rootId().bare : 0, 0, 0, 50);
-		const auto count = local.match([](const MTPDmessages_messages &d) {
-			return int(d.vmessages().v.size());
-		}, [](const auto &) {
-			return 0;
-		});
-		if (count > 0) {
-			messagesReceived(_peer, local, requestId);
-		} else {
-			closeCurrent();
+		if (_peer) {
+			const auto local = AyuMessages::getLocalMTPMessages(_peer, 0, 0, 0, 50);
+			const auto count = local.match([](const MTPDmessages_messages &d) {
+				return int(d.vmessages().v.size());
+			}, [](const auto &) {
+				return 0;
+			});
+			if (count > 0) {
+				messagesReceived(_peer, local, requestId);
+				return;
+			}
 		}
+		closeCurrent();
 	} else if (_delayedShowAtRequest == requestId) {
 		_delayedShowAtRequest = 0;
 	}
