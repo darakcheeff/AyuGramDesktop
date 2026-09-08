@@ -429,31 +429,14 @@ void clearDeletedMessages(ID userId, ID dialogId, ID topicId) {
 
 void addLocalMessage(const LocalMessage &message) {
 	try {
-		const auto existing = storage.select(
-			columns(column<LocalMessage>(&LocalMessage::fakeId)),
+		storage.remove_all<LocalMessage>(
 			where(
 				column<LocalMessage>(&LocalMessage::userId) == message.userId and
 				column<LocalMessage>(&LocalMessage::dialogId) == message.dialogId and
 				column<LocalMessage>(&LocalMessage::messageId) == message.messageId
-			),
-			limit(1)
+			)
 		);
-		if (existing.empty()) {
-			storage.insert(message);
-		} else {
-			storage.update_all(
-				set(
-					c(&LocalMessage::text) = message.text,
-					c(&LocalMessage::textEntities) = message.textEntities,
-					c(&LocalMessage::editDate) = message.editDate
-				),
-				where(
-					c(&LocalMessage::userId) == message.userId and
-					c(&LocalMessage::dialogId) == message.dialogId and
-					c(&LocalMessage::messageId) == message.messageId
-				)
-			);
-		}
+		storage.insert(message);
 	} catch (std::exception &ex) {
 		LOG(("Failed to save local message: %1").arg(ex.what()));
 	}
