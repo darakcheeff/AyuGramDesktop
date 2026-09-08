@@ -4818,6 +4818,12 @@ void InnerWidget::searchReceived(
 			}
 		}
 	}
+	if (!toPreview && _searchResults.size() > 1) {
+		ranges::sort(_searchResults, std::greater<>(), [](const auto &r) {
+			return r->item()->date();
+		});
+	}
+
 	if (type.migrated) {
 		_searchedMigratedCount = fullCount;
 	} else if (!withPreview || !toPreview) {

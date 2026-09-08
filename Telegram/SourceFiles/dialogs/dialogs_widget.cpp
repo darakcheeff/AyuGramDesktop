@@ -3606,7 +3606,7 @@ void Widget::requestMessagesForKeyword(
 		const QString &keyword,
 		int keywordIndex) {
 	const auto type = SearchRequestType{
-		.start = fromStart,
+		.start = fromStart && (keywordIndex == 0),
 	};
 	using Flag = MTPmessages_SearchGlobal::Flag;
 	const auto community = (_searchQueryTab == ChatSearchTab::ThisCommunity)
