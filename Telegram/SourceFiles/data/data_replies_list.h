@@ -77,6 +77,7 @@ private:
 	struct Viewer;
 
 	HistoryItem *lookupRoot();
+	[[nodiscard]] bool isServerThread();
 	[[nodiscard]] Histories &histories();
 
 	void subscribeToUpdates();

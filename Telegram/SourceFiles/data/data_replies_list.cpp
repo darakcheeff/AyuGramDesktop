@@ -532,10 +532,22 @@ HistoryItem *RepliesList::lookupRoot() {
 	return _history->owner().message(_history->peer->id, _rootId);
 }
 
+bool RepliesList::isServerThread() {
+	if (_history->peer->isBroadcast() || _history->isForum() || _owningTopic) {
+		return true;
+	}
+	if (const auto root = lookupRoot()) {
+		if (root->lookupDiscussionPostOriginal() || root->repliesAreComments()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void RepliesList::loadAround(MsgId id) {
 	Expects(!_creating);
 
-	if (_history->peer->isUser() || _history->peer->isChat()) {
+	if (!isServerThread()) {
 		_list.clear();
 		for (const auto &block : _history->blocks) {
 			for (const auto &element : block->messages) {
@@ -612,7 +624,7 @@ void RepliesList::loadAround(MsgId id) {
 void RepliesList::loadBefore() {
 	Expects(!_list.empty());
 
-	if (!_history->peer->isBroadcast() && !_history->isForum()) {
+	if (!isServerThread()) {
 		return;
 	}
 
@@ -662,7 +674,7 @@ void RepliesList::loadBefore() {
 void RepliesList::loadAfter() {
 	Expects(!_list.empty());
 
-	if (!_history->peer->isBroadcast() && !_history->isForum()) {
+	if (!isServerThread()) {
 		return;
 	}
 
