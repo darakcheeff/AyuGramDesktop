@@ -141,4 +141,51 @@ void clearDeletedMessages(not_null<PeerData*> peer, ID topicId) {
 	AyuDatabase::clearDeletedMessages(userId, getDialogIdFromPeer(peer), topicId);
 }
 
+void addLocalMessage(not_null<HistoryItem *> item) {
+	if (item->isLocal() || item->isService()) {
+		return;
+	}
+
+	LocalMessage message;
+	map(item, message);
+
+	crl::async([message = std::move(message)] {
+		AyuDatabase::addLocalMessage(message);
+	});
 }
+
+std::vector<AyuMessageBase> getLocalMessages(not_null<PeerData*> peer, ID topicId, ID minId, ID maxId, int totalLimit) {
+	const ID userId = peer->session().userId().bare & PeerId::kChatTypeMask;
+	return convertToBase(
+		AyuDatabase::getLocalMessages(userId, getDialogIdFromPeer(peer), topicId, minId, maxId, totalLimit));
+}
+
+std::vector<AyuMessageBase> searchLocalMessages(not_null<Main::Session*> session, const QString &query, PeerData *peer, int totalLimit) {
+	const ID userId = session->userId().bare & PeerId::kChatTypeMask;
+	const ID dialogId = peer ? getDialogIdFromPeer(peer) : 0;
+	return convertToBase(
+		AyuDatabase::searchLocalMessages(userId, query.toStdString(), dialogId, totalLimit));
+}
+
+void clearLocalMessages(int olderThanSecs) {
+	crl::async([=] {
+		AyuDatabase::clearLocalMessages(olderThanSecs);
+	});
+}
+
+MTPmessages_Messages getLocalMTPMessages(not_null<PeerData*> peer, ID topicId, ID minId, ID maxId, int totalLimit) {
+	const auto bases = getLocalMessages(peer, topicId, minId, maxId, totalLimit);
+	QVector<MTPMessage> msgs;
+	msgs.reserve(bases.size());
+	for (const auto &b : bases) {
+		msgs.push_back(AyuMapper::toMTPMessage(b));
+	}
+	return MTP_messages_messages(
+		MTP_vector<MTPMessage>(msgs),
+		MTP_vector<MTPForumTopic>(),
+		MTP_vector<MTPChat>(),
+		MTP_vector<MTPUser>()
+	);
+}
+
+} // namespace AyuMessages

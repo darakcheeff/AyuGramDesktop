@@ -86,6 +86,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ayu/ayu_settings.h"
 #include "ayu/ayu_state.h"
 #include "ayu/features/watchers/watchers_manager.h"
+#include "ayu/data/messages_storage.h"
 
 
 namespace {
@@ -1669,6 +1670,7 @@ void History::newItemAdded(not_null<HistoryItem*> item, NewAddType type) {
 	}
 	item->contributeToSlowmode();
 	const auto watcherBypassMute = AyuWatchers::ProcessIncomingMessage(item);
+	AyuMessages::addLocalMessage(item);
 	auto notification = Data::ItemNotification{
 		.item = item,
 		.type = Data::ItemNotificationType::Message,

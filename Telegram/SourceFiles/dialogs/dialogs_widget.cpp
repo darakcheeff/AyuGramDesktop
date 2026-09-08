@@ -6,6 +6,8 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "dialogs/dialogs_widget.h"
+#include "ayu/data/messages_storage.h"
+#include "ayu/utils/ayu_mapper.h"
 
 #include "ayu/utils/smart_search.h"
 #include "base/call_delayed.h"
@@ -3851,7 +3853,38 @@ void Widget::searchFailed(
 	} else {
 		process->requestId = 0;
 		process->full = true;
+		searchLocalFallback(type, process);
 	}
+}
+
+void Widget::searchLocalFallback(
+		SearchRequestType type,
+		not_null<SearchProcessState*> process) {
+	const auto query = _searchQuery.trimmed();
+	if (query.isEmpty()) {
+		return;
+	}
+	const auto peer = searchInPeer();
+	const auto bases = AyuMessages::searchLocalMessages(&session(), query, peer, 50);
+	if (bases.empty()) {
+		return;
+	}
+
+	QVector<MTPMessage> msgs;
+	msgs.reserve(bases.size());
+	for (const auto &b : bases) {
+		msgs.push_back(AyuMapper::toMTPMessage(b));
+	}
+
+	searchReceived(
+		type,
+		MTP_messages_messages(
+			MTP_vector<MTPMessage>(msgs),
+			MTP_vector<MTPForumTopic>(),
+			MTP_vector<MTPChat>(),
+			MTP_vector<MTPUser>()
+		),
+		process);
 }
 
 void Widget::dragEnterEvent(QDragEnterEvent *e) {

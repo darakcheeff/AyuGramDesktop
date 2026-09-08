@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/history_widget.h"
+#include "ayu/data/messages_storage.h"
 
 #include "api/api_compose_with_ai.h"
 #include "api/api_editing.h"
@@ -4622,7 +4623,17 @@ void HistoryWidget::messagesFailed(const MTP::Error &error, int requestId) {
 		_preloadDownRequest = 0;
 	} else if (_firstLoadRequest == requestId) {
 		_firstLoadRequest = 0;
-		closeCurrent();
+		const auto local = AyuMessages::getLocalMTPMessages(_peer, _topic ? _topic->rootId().bare : 0, 0, 0, 50);
+		const auto count = local.match([](const MTPDmessages_messages &d) {
+			return int(d.vmessages().v.size());
+		}, [](const auto &) {
+			return 0;
+		});
+		if (count > 0) {
+			messagesReceived(_peer, local, requestId);
+		} else {
+			closeCurrent();
+		}
 	} else if (_delayedShowAtRequest == requestId) {
 		_delayedShowAtRequest = 0;
 	}

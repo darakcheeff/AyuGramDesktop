@@ -8,6 +8,7 @@
 
 #include "lang_auto.h"
 #include "ayu/ayu_settings.h"
+#include "ayu/data/messages_storage.h"
 #include "ayu/ui/boxes/donate_qr_box.h"
 #include "ayu/ui/settings/ayu_builder.h"
 #include "ayu/ui/settings/settings_ayu_utils.h"
@@ -204,6 +205,22 @@ void BuildOtherThings(SectionBuilder &builder) {
 		.onClick = [=] {
 			Core::Application::RegisterUrlScheme();
 			controller->showToast(tr::lng_box_done(tr::now));
+		},
+	});
+	builder.addButton({
+		.id = u"ayu/clearLocalMessages"_q,
+		.title = rpl::single(QString::fromUtf8("Очистить локальную базу сообщений")),
+		.icon = { &st::menuIconDelete },
+		.onClick = [=] {
+			controller->show(Ui::MakeConfirmBox({
+				.text = rpl::single(QString::fromUtf8("Вы уверены, что хотите очистить локальную оффлайн-базу сообщений?")),
+				.confirmed = [=](Fn<void()> &&close) {
+					AyuMessages::clearLocalMessages(0);
+					controller->showToast(tr::lng_box_done(tr::now));
+					close();
+				},
+				.confirmText = tr::lng_box_yes(),
+			}));
 		},
 	});
 	builder.addButton({

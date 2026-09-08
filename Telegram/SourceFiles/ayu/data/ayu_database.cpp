@@ -27,6 +27,14 @@ auto storage = make_storage(
 			   column<EditedMessage>(&EditedMessage::userId),
 			   column<EditedMessage>(&EditedMessage::dialogId),
 			   column<EditedMessage>(&EditedMessage::messageId)),
+	make_index("idx_local_message_userId_dialogId_messageId",
+			   column<LocalMessage>(&LocalMessage::userId),
+			   column<LocalMessage>(&LocalMessage::dialogId),
+			   column<LocalMessage>(&LocalMessage::messageId)),
+	make_index("idx_local_message_userId_dialogId_date",
+			   column<LocalMessage>(&LocalMessage::userId),
+			   column<LocalMessage>(&LocalMessage::dialogId),
+			   column<LocalMessage>(&LocalMessage::date)),
 	make_table<DeletedMessage>(
 		"DeletedMessage",
 		make_column("fakeId", &DeletedMessage::fakeId, primary_key().autoincrement()),
@@ -98,6 +106,42 @@ auto storage = make_storage(
 		make_column("thumbsSerialized", &EditedMessage::thumbsSerialized),
 		make_column("documentAttributesSerialized", &EditedMessage::documentAttributesSerialized),
 		make_column("mimeType", &EditedMessage::mimeType)
+	),
+	make_table<LocalMessage>(
+		"LocalMessage",
+		make_column("fakeId", &LocalMessage::fakeId, primary_key().autoincrement()),
+		make_column("userId", &LocalMessage::userId),
+		make_column("dialogId", &LocalMessage::dialogId),
+		make_column("groupedId", &LocalMessage::groupedId),
+		make_column("peerId", &LocalMessage::peerId),
+		make_column("fromId", &LocalMessage::fromId),
+		make_column("topicId", &LocalMessage::topicId),
+		make_column("messageId", &LocalMessage::messageId),
+		make_column("date", &LocalMessage::date),
+		make_column("flags", &LocalMessage::flags),
+		make_column("editDate", &LocalMessage::editDate),
+		make_column("views", &LocalMessage::views),
+		make_column("fwdFlags", &LocalMessage::fwdFlags),
+		make_column("fwdFromId", &LocalMessage::fwdFromId),
+		make_column("fwdName", &LocalMessage::fwdName),
+		make_column("fwdDate", &LocalMessage::fwdDate),
+		make_column("fwdPostAuthor", &LocalMessage::fwdPostAuthor),
+		make_column("replyFlags", &LocalMessage::replyFlags),
+		make_column("replyMessageId", &LocalMessage::replyMessageId),
+		make_column("replyPeerId", &LocalMessage::replyPeerId),
+		make_column("replyTopId", &LocalMessage::replyTopId),
+		make_column("replyForumTopic", &LocalMessage::replyForumTopic),
+		make_column("replySerialized", &LocalMessage::replySerialized),
+		make_column("entityCreateDate", &LocalMessage::entityCreateDate),
+		make_column("text", &LocalMessage::text),
+		make_column("textEntities", &LocalMessage::textEntities),
+		make_column("mediaPath", &LocalMessage::mediaPath),
+		make_column("hqThumbPath", &LocalMessage::hqThumbPath),
+		make_column("documentType", &LocalMessage::documentType),
+		make_column("documentSerialized", &LocalMessage::documentSerialized),
+		make_column("thumbsSerialized", &LocalMessage::thumbsSerialized),
+		make_column("documentAttributesSerialized", &LocalMessage::documentAttributesSerialized),
+		make_column("mimeType", &LocalMessage::mimeType)
 	),
 	make_table<DeletedDialog>(
 		"DeletedDialog",
@@ -380,6 +424,110 @@ void clearDeletedMessages(ID userId, ID dialogId, ID topicId) {
 			)
 		);
 	} catch (std::exception &) {
+	}
+}
+
+void addLocalMessage(const LocalMessage &message) {
+	try {
+		const auto existing = storage.select(
+			columns(column<LocalMessage>(&LocalMessage::fakeId)),
+			where(
+				column<LocalMessage>(&LocalMessage::userId) == message.userId and
+				column<LocalMessage>(&LocalMessage::dialogId) == message.dialogId and
+				column<LocalMessage>(&LocalMessage::messageId) == message.messageId
+			),
+			limit(1)
+		);
+		if (existing.empty()) {
+			storage.insert(message);
+		} else {
+			storage.update_all(
+				set(
+					c(&LocalMessage::text) = message.text,
+					c(&LocalMessage::textEntities) = message.textEntities,
+					c(&LocalMessage::editDate) = message.editDate
+				),
+				where(
+					c(&LocalMessage::userId) == message.userId and
+					c(&LocalMessage::dialogId) == message.dialogId and
+					c(&LocalMessage::messageId) == message.messageId
+				)
+			);
+		}
+	} catch (std::exception &ex) {
+		LOG(("Failed to save local message: %1").arg(ex.what()));
+	}
+}
+
+std::vector<LocalMessage> getLocalMessages(ID userId, ID dialogId, ID topicId, ID minId, ID maxId, int totalLimit) {
+	try {
+		return storage.get_all<LocalMessage>(
+			where(
+				column<LocalMessage>(&LocalMessage::userId) == userId and
+				column<LocalMessage>(&LocalMessage::dialogId) == dialogId and
+				(column<LocalMessage>(&LocalMessage::topicId) == topicId or topicId == 0) and
+				(column<LocalMessage>(&LocalMessage::messageId) > minId or minId == 0) and
+				(column<LocalMessage>(&LocalMessage::messageId) < maxId or maxId == 0)
+			),
+			order_by(column<LocalMessage>(&LocalMessage::messageId)).desc(),
+			limit(totalLimit)
+		);
+	} catch (std::exception &ex) {
+		LOG(("Failed to get local messages: %1").arg(ex.what()));
+		return {};
+	}
+}
+
+std::vector<LocalMessage> searchLocalMessages(ID userId, const std::string &searchQuery, ID dialogId, int totalLimit) {
+	try {
+		std::string escaped;
+		escaped.reserve(searchQuery.size());
+		for (const auto c : searchQuery) {
+			if (c == '%' || c == '_' || c == '\') {
+				escaped += '\';
+			}
+			escaped += c;
+		}
+		const auto pattern = "%" + escaped + "%";
+
+		if (dialogId != 0) {
+			return storage.get_all<LocalMessage>(
+				where(
+					column<LocalMessage>(&LocalMessage::userId) == userId and
+					column<LocalMessage>(&LocalMessage::dialogId) == dialogId and
+					like(column<LocalMessage>(&LocalMessage::text), pattern, "\\")
+				),
+				order_by(column<LocalMessage>(&LocalMessage::date)).desc(),
+				limit(totalLimit)
+			);
+		} else {
+			return storage.get_all<LocalMessage>(
+				where(
+					column<LocalMessage>(&LocalMessage::userId) == userId and
+					like(column<LocalMessage>(&LocalMessage::text), pattern, "\\")
+				),
+				order_by(column<LocalMessage>(&LocalMessage::date)).desc(),
+				limit(totalLimit)
+			);
+		}
+	} catch (std::exception &ex) {
+		LOG(("Failed to search local messages: %1").arg(ex.what()));
+		return {};
+	}
+}
+
+void clearLocalMessages(int olderThanSecs) {
+	try {
+		if (olderThanSecs > 0) {
+			const auto cutoff = base::unixtime::now() - olderThanSecs;
+			storage.remove_all<LocalMessage>(
+				where(column<LocalMessage>(&LocalMessage::date) < cutoff)
+			);
+		} else {
+			storage.remove_all<LocalMessage>();
+		}
+	} catch (std::exception &ex) {
+		LOG(("Failed to clear local messages: %1").arg(ex.what()));
 	}
 }
 

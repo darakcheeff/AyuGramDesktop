@@ -298,6 +298,9 @@ private:
 		SearchRequestType type,
 		const MTP::Error &error,
 		not_null<SearchProcessState*> process);
+	void searchLocalFallback(
+		SearchRequestType type,
+		not_null<SearchProcessState*> process);
 	void searchApplyEmpty(
 		SearchRequestType type,
 		not_null<SearchProcessState*> process);

@@ -1,3 +1,4 @@
+#include "ayu/data/entities.h"
 // This is the source code of AyuGram for Desktop.
 //
 // We do not and cannot prevent the use of our code,
@@ -91,6 +92,58 @@ std::pair<std::string, std::vector<char>> serializeTextWithEntities(not_null<His
 
 MTPVector<MTPMessageEntity> deserializeTextWithEntities(std::vector<char> serialized) {
 	return deserializeObject<MTPVector<MTPMessageEntity>>(serialized);
+}
+
+MTPMessage toMTPMessage(const AyuMessageBase &m) {
+	using Flag = MTPDmessage::Flag;
+	auto flags = Flag::f_from_id;
+	if (m.editDate > 0) {
+		flags |= Flag::f_edit_date;
+	}
+	if (m.views > 0) {
+		flags |= Flag::f_views;
+	}
+
+	const auto fromPeerId = PeerId(m.fromId != 0 ? (m.fromId | PeerId::kUserType) : PeerId(m.peerId));
+	const auto peerId = PeerId(m.peerId);
+
+	return MTP_message(
+		MTP_flags(flags),
+		MTP_int(m.messageId),
+		peerToMTP(fromPeerId),
+		MTPint(), // from_boosts_applied
+		MTPstring(), // from_rank
+		peerToMTP(peerId),
+		MTPPeer(), // saved_peer_id
+		MTPMessageFwdHeader(),
+		MTPlong(), // via_bot_id
+		MTPlong(), // via_business_bot_id
+		MTPPeer(), // guestchat_via_from
+		MTPMessageReplyHeader(),
+		MTP_int(m.date),
+		MTP_string(QString::fromStdString(m.text)),
+		MTPMessageMedia(),
+		MTPReplyMarkup(),
+		deserializeTextWithEntities(m.textEntities),
+		MTP_int(m.views),
+		MTPint(), // forwards
+		MTPMessageReplies(),
+		MTP_int(m.editDate),
+		MTPbytes(), // post_author
+		MTPlong(), // grouped_id
+		MTPMessageReactions(),
+		MTPVector<MTPRestrictionReason>(),
+		MTPint(), // ttl_period
+		MTPint(), // quick_reply_shortcut_id
+		MTPlong(), // effect
+		MTPFactCheck(),
+		MTPint(), // report_delivery_until_date
+		MTPlong(), // paid_message_stars
+		MTPSuggestedPost(),
+		MTPint(), // schedule_repeat_period
+		MTPstring(), // summary_from_language
+		MTPRichMessage()
+	);
 }
 
 int mapItemFlagsToMTPFlags(not_null<HistoryItem*> item) {
