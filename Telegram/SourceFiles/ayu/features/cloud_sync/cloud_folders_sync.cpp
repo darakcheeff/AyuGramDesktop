@@ -120,8 +120,8 @@ private:
 	void ensureChannelArchivedAndMuted(not_null<ChannelData*> ch) {
 		_session->data().notifySettings().update(ch, Data::MuteValue{ .forever = true });
 		const auto history = _session->data().history(ch);
-		if (history->folderId() != Data::Folder::kId) {
-			_session->api().toggleHistoryArchived(history, true);
+		if (!history->folder() || history->folder()->id() != Data::Folder::kId) {
+			_session->api().toggleHistoryArchived(history, true, nullptr);
 		}
 	}
 
@@ -155,7 +155,7 @@ private:
 		if (file.open(QIODevice::WriteOnly)) {
 			auto j = serializeLocalFolders();
 			if (_channel) {
-				j["channelId"] = _channel->id.bare;
+				j["channelId"] = peerToChannel(_channel->id).bare;
 			}
 			file.write(QByteArray::fromStdString(j.dump()));
 		}
@@ -167,7 +167,7 @@ private:
 		_localTimestamp = QDateTime::currentSecsSinceEpoch();
 		root["updatedAt"] = _localTimestamp;
 		if (_channel) {
-			root["channelId"] = _channel->id.bare;
+			root["channelId"] = peerToChannel(_channel->id).bare;
 		}
 
 		const auto &list = _session->data().chatsFilters().list();
