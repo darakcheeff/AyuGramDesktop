@@ -722,6 +722,9 @@ void Stories::savedStateChanged(not_null<Story*> story) {
 }
 
 void Stories::loadMore(StorySourcesList list) {
+	if (AyuSettings::getInstance().disableStories()) {
+		return;
+	}
 	const auto index = static_cast<int>(list);
 	if (_loadMoreRequestId[index] || _sourcesLoaded[index]) {
 		return;
@@ -2327,6 +2330,9 @@ bool Stories::isQuitPrevent() {
 }
 
 void Stories::incrementPreloadingMainSources() {
+	if (AyuSettings::getInstance().disableStories()) {
+		return;
+	}
 	Expects(_preloadingMainSourcesCounter >= 0);
 
 	if (++_preloadingMainSourcesCounter == 1
@@ -2397,7 +2403,7 @@ std::optional<Stories::PeerSourceState> Stories::peerSourceState(
 }
 
 void Stories::requestReadTills() {
-	if (_readTillReceived || _readTillsRequestId) {
+	if (AyuSettings::getInstance().disableStories() || _readTillReceived || _readTillsRequestId) {
 		return;
 	}
 	const auto api = &_owner->session().api();
@@ -2598,6 +2604,9 @@ bool Stories::rebuildPreloadSources(StorySourcesList list) {
 }
 
 void Stories::continuePreloading() {
+	if (AyuSettings::getInstance().disableStories()) {
+		return;
+	}
 	const auto now = _preloading ? _preloading->id() : FullStoryId();
 	if (now) {
 		if (shouldContinuePreload(now)) {
@@ -2638,6 +2647,9 @@ FullStoryId Stories::nextPreloadId() const {
 }
 
 void Stories::startPreloading(not_null<Story*> story) {
+	if (AyuSettings::getInstance().disableStories()) {
+		return;
+	}
 	Expects(!_preloaded.contains(story->fullId()));
 
 	const auto id = story->fullId();
