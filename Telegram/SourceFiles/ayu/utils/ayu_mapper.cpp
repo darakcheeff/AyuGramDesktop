@@ -14,6 +14,8 @@
 #include "history/history_item_components.h"
 #include "mtproto/connection_abstract.h"
 #include "mtproto/details/mtproto_dump_to_text.h"
+#include "ayu/utils/telegram_helpers.h"
+#include "data/data_peer_id.h"
 
 namespace AyuMapper {
 
@@ -96,7 +98,7 @@ MTPVector<MTPMessageEntity> deserializeTextWithEntities(std::vector<char> serial
 
 MTPMessage toMTPMessage(const AyuMessageBase &m) {
 	using Flag = MTPDmessage::Flag;
-	auto flags = Flag::f_from_id;
+	MTPDmessage::Flags flags = Flag::f_from_id;
 	if (m.editDate > 0) {
 		flags |= Flag::f_edit_date;
 	}
@@ -104,16 +106,34 @@ MTPMessage toMTPMessage(const AyuMessageBase &m) {
 		flags |= Flag::f_views;
 	}
 
-	const auto fromPeerId = PeerId(m.fromId != 0 ? (m.fromId | PeerId::kUserType) : PeerId(m.peerId));
-	const auto peerId = PeerId(m.peerId);
+	MTPPeer fromPeer;
+	if (m.fromId != 0) {
+		if (const auto from = getPeerFromDialogId(m.fromId)) {
+			fromPeer = peerToMTP(from->id);
+		} else {
+			fromPeer = MTP_peerUser(MTP_long(m.fromId));
+		}
+	} else {
+		fromPeer = MTP_peerUser(MTP_long(0));
+	}
+
+	MTPPeer peer;
+	const auto absDialogId = std::abs(m.dialogId);
+	if (const auto p = getPeerFromDialogId(absDialogId != 0 ? absDialogId : m.peerId)) {
+		peer = peerToMTP(p->id);
+	} else if (m.dialogId < 0) {
+		peer = MTP_peerChannel(MTP_long(absDialogId));
+	} else {
+		peer = MTP_peerUser(MTP_long(absDialogId != 0 ? absDialogId : m.peerId));
+	}
 
 	return MTP_message(
 		MTP_flags(flags),
 		MTP_int(m.messageId),
-		peerToMTP(fromPeerId),
+		fromPeer,
 		MTPint(), // from_boosts_applied
 		MTPstring(), // from_rank
-		peerToMTP(peerId),
+		peer,
 		MTPPeer(), // saved_peer_id
 		MTPMessageFwdHeader(),
 		MTPlong(), // via_bot_id
