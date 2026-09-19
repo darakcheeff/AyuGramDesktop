@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+# CRITICAL: unset CCACHE_DISABLE baked into container image!
+unset CCACHE_DISABLE
+export CCACHE_DISABLE=0
+
 export CCACHE_DIR="${CCACHE_DIR:-/usr/src/tdesktop/.ccache}"
 mkdir -p "$CCACHE_DIR"
 
@@ -12,6 +16,8 @@ if [ -x "$CCACHE_BIN" ]; then
     ln -sf "$CCACHE_BIN" /tmp/ccache-bin/g++
     ln -sf "$CCACHE_BIN" /tmp/ccache-bin/cc
     ln -sf "$CCACHE_BIN" /tmp/ccache-bin/c++
+    ln -sf "$CCACHE_BIN" /tmp/ccache-bin/x86_64-redhat-linux-gcc
+    ln -sf "$CCACHE_BIN" /tmp/ccache-bin/x86_64-redhat-linux-g++
     export PATH="/tmp/ccache-bin:$PATH"
 fi
 
