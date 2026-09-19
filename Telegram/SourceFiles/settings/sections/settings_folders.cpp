@@ -831,7 +831,7 @@ void SetupRecommendedSection(
 	const auto addFilter = [=](const Data::ChatFilter &filter) {
 		const auto button = filtersWrap->add(
 			object_ptr<FilterRowButton>(filtersWrap, session, filter));
-		state->rows.push_back({ filter, button });
+		state->rows.push_back({ button, filter });
 		button->removeRequests(
 		) | rpl::on_next([=] {
 			const auto row = find(button);
