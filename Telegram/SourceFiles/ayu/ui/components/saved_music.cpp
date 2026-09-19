@@ -310,9 +310,9 @@ void AyuMusicButton::makeCover() {
 						overrideBg ? st::groupCallMembersFg->c : st::windowBoldFg->c);
 				}
 
-				strong->repaint();
-				strong->_title->repaint();
-				strong->_performer->repaint();
+				strong->update();
+				strong->_title->update();
+				strong->_performer->update();
 
 				strong->_onReady.fire({});
 			});

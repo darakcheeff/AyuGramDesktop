@@ -129,7 +129,9 @@ void ComputeDebugMode() {
 		Logs::SetDebugEnabled(true);
 	}
 	if (Logs::DebugEnabled()) {
-		QLoggingCategory::setFilterRules("qt.qpa.gl.debug=true");
+		QLoggingCategory::setFilterRules("qt.qpa.gl.debug=true\nqt.gui.imageio=false");
+	} else {
+		QLoggingCategory::setFilterRules("qt.gui.imageio=false");
 	}
 }
 

@@ -54,11 +54,11 @@ QString StemRussian(const QString &word) {
 	static const QRegularExpression participle(
 		QString::fromUtf8("((ивш|ывш|ующ)|((?<=[ая])(ем|нн|вш|ющ|щ)))$")
 	);
+	static const QRegularExpression verb(
+		QString::fromUtf8("((ила|ыла|ена|ейте|уйте|ите|или|ыли|ей|уй|ил|ыл|им|ым|ен|ило|ыло|ено|ят|ует|уют|ит|ыт|ены|ить|ыть|еть|ать|ять|ти|ишь)|((?<=[ая])(ла|на|ете|йте|ли|й|л|ем|н|ло|но|ет|ют|ны|ть|ешь|нно)))$")
+	);
 	static const QRegularExpression noun(
 		QString::fromUtf8("(а|ев|ов|ие|ье|е|иями|ями|ами|еи|ии|и|ией|ей|ой|ий|й|иям|ям|ием|ем|ам|ом|о|у|ах|иях|ях|ы|ь|ию|ью|ю|ия|ья|я)$")
-	);
-	static const QRegularExpression verb(
-		QString::fromUtf8("((ила|ыла|ейте|уйте|ите|или|ыли|ей|уй|ил|ыл|им|ым|ило|ыло|ено|ят|ует|уют|ит|ыт|ить|ыть|ишь)|((?<=[ая])(ла|на|ете|йте|ли|й|л|ем|н|ло|но|ет|ют|ны|ть|ешь|нно)))$")
 	);
 
 	auto origRv = rv;
@@ -70,10 +70,10 @@ QString StemRussian(const QString &word) {
 		if (rv != rvBeforeAdj) {
 			rv.replace(participle, QString());
 		} else {
-			auto rvBeforeNoun = rv;
-			rv.replace(noun, QString());
-			if (rv == rvBeforeNoun) {
-				rv.replace(verb, QString());
+			auto rvBeforeVerb = rv;
+			rv.replace(verb, QString());
+			if (rv == rvBeforeVerb) {
+				rv.replace(noun, QString());
 			}
 		}
 	}
@@ -203,19 +203,140 @@ QStringList ExtractKeywords(const QString &query) {
 	return results;
 }
 
-QString ExtractServerQuery(const QString &query) {
-	const auto kw = ExtractKeywords(query);
-	if (kw.isEmpty()) {
-		return query.trimmed();
+QStringList ExtractServerQueries(const QString &query) {
+	QString working = query.trimmed();
+	if (working.isEmpty()) {
+		return {};
 	}
-	// Return the longest/most specific keyword as anchor
-	QString best = kw.first();
-	for (const auto &k : kw) {
-		if (k.length() > best.length()) {
-			best = k;
+
+	// 1. Remove exclusions (-word or !word or -"phrase")
+	static const QRegularExpression excludeRx(QString::fromUtf8("[-!](\"[^\"]+\"|\\S+)"));
+	working.remove(excludeRx);
+	working = working.trimmed();
+	if (working.isEmpty()) {
+		return {};
+	}
+
+	// 2. If no parentheses exist, check for simple alternation A|B|C or A OR B
+	if (!working.contains(QChar(u'('))) {
+		static const QRegularExpression orSepRx(QString::fromUtf8("\\s*(\\||\\bOR\\b|\\bor\\b)\\s*"));
+		if (working.contains(QChar(u'|')) || working.contains(QRegularExpression(QString::fromUtf8("\\bOR\\b|\\bor\\b")))) {
+			const auto parts = working.split(orSepRx, Qt::SkipEmptyParts);
+			QStringList queries;
+			for (const auto &p : parts) {
+				const auto pt = p.trimmed();
+				if (pt.length() >= 2 && !queries.contains(pt, Qt::CaseInsensitive)) {
+					queries.append(pt);
+				}
+			}
+			if (!queries.isEmpty()) {
+				return queries;
+			}
+		}
+		// No alternation, plain query
+		return { working };
+	}
+
+	// 3. Parentheses exist: parse into sequential slots (choice groups)
+	// Example: "(заменить|перевыпустить|продлить|преоформить) внж"
+	// Slot 0: ["заменить", "перевыпустить", "продлить", "преоформить"]
+	// Slot 1: ["внж"]
+	std::vector<QStringList> slots;
+	int pos = 0;
+	const int len = working.length();
+
+	while (pos < len) {
+		while (pos < len && working[pos].isSpace()) {
+			++pos;
+		}
+		if (pos >= len) break;
+
+		if (working[pos] == QChar(u'(')) {
+			const int start = pos + 1;
+			const int end = working.indexOf(QChar(u')'), start);
+			const auto inner = (end == -1)
+				? working.mid(start).trimmed()
+				: working.mid(start, end - start).trimmed();
+			pos = (end == -1) ? len : (end + 1);
+
+			static const QRegularExpression innerOrRx(QString::fromUtf8("\\s*(\\||\\bOR\\b|\\bor\\b)\\s*"));
+			const auto parts = inner.split(innerOrRx, Qt::SkipEmptyParts);
+			QStringList choices;
+			for (const auto &p : parts) {
+				const auto t = p.trimmed();
+				if (!t.isEmpty() && !choices.contains(t, Qt::CaseInsensitive)) {
+					choices.append(t);
+				}
+			}
+			if (!choices.isEmpty()) {
+				slots.push_back(choices);
+			}
+		} else if (working[pos] == QChar(u'"')) {
+			const int start = pos + 1;
+			const int end = working.indexOf(QChar(u'"'), start);
+			const auto phrase = (end == -1)
+				? working.mid(start).trimmed()
+				: working.mid(start, end - start).trimmed();
+			pos = (end == -1) ? len : (end + 1);
+			if (!phrase.isEmpty()) {
+				slots.push_back({ QString(u'"') + phrase + QString(u'"') });
+			}
+		} else {
+			// Normal word(s) outside parens
+			const int start = pos;
+			while (pos < len && working[pos] != QChar(u'(') && working[pos] != QChar(u'"') && !working[pos].isSpace()) {
+				++pos;
+			}
+			const auto word = working.mid(start, pos - start).trimmed();
+			if (!word.isEmpty() && word != QChar(u'|') && word.compare(QString::fromUtf8("OR"), Qt::CaseInsensitive) != 0) {
+				slots.push_back({ word });
+			}
 		}
 	}
-	return best;
+
+	if (slots.empty()) {
+		return { working };
+	}
+
+	// 4. Generate Cartesian product of slots to form combinations
+	// e.g. ["заменить", "перевыпустить", "продлить", "преоформить"] x ["внж"]
+	// -> ["заменить внж", "перевыпустить внж", "продлить внж", "преоформить внж"]
+	constexpr int kMaxCombinations = 10;
+	QStringList combinations = { QString() };
+
+	for (const auto &slot : slots) {
+		if (slot.isEmpty()) continue;
+		QStringList next;
+		for (const auto &prefix : combinations) {
+			for (const auto &choice : slot) {
+				const auto combined = prefix.isEmpty()
+					? choice
+					: (prefix + QChar(u' ') + choice);
+				if (!next.contains(combined, Qt::CaseInsensitive)) {
+					next.append(combined);
+				}
+				if (next.size() >= kMaxCombinations) {
+					break;
+				}
+			}
+			if (next.size() >= kMaxCombinations) {
+				break;
+			}
+		}
+		if (!next.isEmpty()) {
+			combinations = std::move(next);
+		}
+	}
+
+	return combinations.isEmpty() ? QStringList{ working } : combinations;
+}
+
+QString ExtractServerQuery(const QString &query) {
+	const auto list = ExtractServerQueries(query);
+	if (list.isEmpty()) {
+		return query.trimmed();
+	}
+	return list.first();
 }
 
 namespace {
@@ -265,14 +386,21 @@ public:
 			return false;
 		}
 
-		// Standard words: match either exact word or stem equality
+		// Standard words: match either exact word, stem equality, or root prefix
 		for (int i = 0; i < ctx.words.size(); ++i) {
 			if (ctx.words[i].compare(_word, Qt::CaseInsensitive) == 0) {
 				return true;
 			}
 			if (i < ctx.stems.size() && !ctx.stems[i].isEmpty()) {
-				if (ctx.stems[i].compare(_stem, Qt::CaseInsensitive) == 0) {
+				const auto &wStem = ctx.stems[i];
+				if (wStem.compare(_stem, Qt::CaseInsensitive) == 0) {
 					return true;
+				}
+				if (_stem.length() >= 4 && wStem.length() >= 4) {
+					if (wStem.startsWith(_stem, Qt::CaseInsensitive)
+						|| _stem.startsWith(wStem, Qt::CaseInsensitive)) {
+						return true;
+					}
 				}
 			}
 		}
@@ -591,14 +719,50 @@ bool Matches(const QString &text, const QString &query) {
 		stems.append(StemWord(w));
 	}
 
+	// 3. Global exclusions check (-word, !word, -"exact phrase"):
+	// If the message contains ANY excluded term, reject immediately!
+	static const QRegularExpression excludeRx(QString::fromUtf8("[-!](\"[^\"]+\"|\\S+)"));
+	auto exIt = excludeRx.globalMatch(trimmedQuery);
+	while (exIt.hasNext()) {
+		auto ex = exIt.next().captured(1).trimmed();
+		if (ex.startsWith(QChar(u'"')) && ex.endsWith(QChar(u'"')) && ex.length() > 2) {
+			ex = ex.mid(1, ex.length() - 2);
+		}
+		if (ex.isEmpty()) continue;
+
+		// Exact substring check (e.g. "РВП", "рвп")
+		if (text.contains(ex, Qt::CaseInsensitive)) {
+			return false;
+		}
+
+		// Morphological check
+		const auto exStem = StemWord(ex);
+		if (!exStem.isEmpty()) {
+			for (const auto &s : stems) {
+				if (s.compare(exStem, Qt::CaseInsensitive) == 0
+					|| (exStem.length() >= 4 && s.startsWith(exStem, Qt::CaseInsensitive))) {
+					return false;
+				}
+			}
+		}
+	}
+
+	// Remove exclusions from query before AST parsing so AST only processes positive logic
+	QString positiveQuery = trimmedQuery;
+	positiveQuery.remove(excludeRx);
+	positiveQuery = positiveQuery.trimmed();
+	if (positiveQuery.isEmpty()) {
+		return true;
+	}
+
 	const EvalContext ctx{
 		.text = text,
 		.words = words,
 		.stems = stems,
 	};
 
-	// 3. Parse AST and evaluate
-	Parser parser(trimmedQuery);
+	// 4. Parse AST and evaluate
+	Parser parser(positiveQuery);
 	const auto ast = parser.parse();
 	if (!ast) {
 		return true;

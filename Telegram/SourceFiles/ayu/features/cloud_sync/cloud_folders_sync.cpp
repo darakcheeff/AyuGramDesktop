@@ -27,6 +27,8 @@
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QDebug>
+#include <iostream>
 #include <map>
 #include <memory>
 
@@ -50,13 +52,22 @@ public:
 
 	void start() {
 		loadFromLocalCache();
-		if (const auto existing = findExistingSyncChannel()) {
-			_channel = existing;
-			ensureChannelArchivedAndMuted(existing);
-			fetchHistoryFromChannel(existing);
-		}
-		// Schedule sync after short delay once session is connected
-		_debounceTimer.callOnce(2000);
+
+		// Subscribe to chat filters changes so ANY folder modification automatically triggers sync
+		_session->data().chatsFilters().changed(
+		) | rpl::start_with_next([=] {
+			scheduleSync();
+		}, _lifetime);
+
+		// Ensure sync storage channel is located or created at launch
+		findOrCreateSyncChannel([=](ChannelData *ch) {
+			if (ch) {
+				fetchHistoryFromChannel(ch);
+			}
+		});
+
+		// Also schedule sync shortly after launch to push current folders if needed
+		_debounceTimer.callOnce(2500);
 	}
 
 	void scheduleSync() {
@@ -65,12 +76,6 @@ public:
 	}
 
 	void syncNow() {
-		const auto &list = _session->data().chatsFilters().list();
-		const auto count = ranges::count_if(list, [](const auto &f) { return f.id() > 0; });
-		if (count == 0 && !_channel) {
-			return;
-		}
-
 		if (!_channel) {
 			_channel = findExistingSyncChannel();
 		}
@@ -232,9 +237,6 @@ private:
 				if (!filterId) {
 					continue;
 				}
-				if (!Data::IsLocalFilterId(filterId)) {
-					continue;
-				}
 				using Flag = Data::ChatFilter::Flag;
 				const auto flags = (fj.value("contacts", false) ? Flag::Contacts : Flag(0))
 					| (fj.value("nonContacts", false) ? Flag::NonContacts : Flag(0))
@@ -327,6 +329,7 @@ private:
 	}
 
 	void fetchHistoryFromChannel(not_null<ChannelData*> ch) {
+		qWarning() << "[AyuCloudSync] Fetching folder history from sync channel:" << ch->name();
 		_session->api().request(MTPmessages_GetHistory(
 			ch->input(),
 			MTP_int(0),
@@ -350,6 +353,7 @@ private:
 						try {
 							const auto j = nlohmann::json::parse(jsonStr.toStdString());
 							const auto remoteTime = j.value("updatedAt", uint64(0));
+							qWarning() << "[AyuCloudSync] Found remote sync payload, updatedAt:" << remoteTime << "localTimestamp:" << _localTimestamp;
 							if (remoteTime > _localTimestamp) {
 								applyJson(j);
 								saveToLocalCache();
@@ -367,6 +371,7 @@ private:
 	}
 
 	void uploadToChannel(not_null<ChannelData*> ch) {
+		qWarning() << "[AyuCloudSync] Uploading folder data to sync channel:" << ch->name();
 		const auto j = serializeLocalFolders();
 		const auto jsonStr = QString::fromStdString(j.dump());
 		const auto text = QString::fromUtf8(kSyncTag) + u"\n"_q + jsonStr;
@@ -380,12 +385,14 @@ private:
 
 	void findOrCreateSyncChannel(Fn<void(ChannelData*)> done) {
 		if (const auto existing = findExistingSyncChannel()) {
+			qWarning() << "[AyuCloudSync] Found existing sync storage channel:" << existing->name();
 			_channel = existing;
 			ensureChannelArchivedAndMuted(existing);
 			done(existing);
 			return;
 		}
 
+		qWarning() << "[AyuCloudSync] Creating sync storage channel...";
 		using Flag = MTPchannels_CreateChannel::Flag;
 		_session->api().request(MTPchannels_CreateChannel(
 			MTP_flags(Flag::f_broadcast),
@@ -417,12 +424,14 @@ private:
 			});
 
 			if (ch) {
+				qWarning() << "[AyuCloudSync] Successfully created sync storage channel:" << ch->name();
 				_channel = ch;
 				ensureChannelArchivedAndMuted(ch);
 				saveToLocalCache();
 			}
 			done(ch);
 		}).fail([=](const MTP::Error &error) {
+			qWarning() << "[AyuCloudSync] Failed to create sync channel:" << error.type();
 			LOG(("AyuCloudSync: Failed to create sync channel: %1").arg(error.type()));
 			done(nullptr);
 		}).send();
@@ -432,6 +441,7 @@ private:
 	base::Timer _debounceTimer;
 	ChannelData *_channel = nullptr;
 	uint64 _localTimestamp = 0;
+	rpl::lifetime _lifetime;
 };
 
 std::map<not_null<Main::Session*>, std::unique_ptr<SyncManager>> Managers;

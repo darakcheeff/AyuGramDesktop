@@ -3189,7 +3189,7 @@ bool Widget::search(bool inCache, SearchRequestDelay delay) {
 								? Flag()
 								: Flag::f_saved_reaction)),
 						inPeer->input(),
-						MTP_string(_searchQuery),
+						MTP_string(SmartSearch::ExtractServerQuery(_searchQuery)),
 						(fromPeer ? fromPeer->input() : MTP_inputPeerEmpty()),
 						(savedPeer ? savedPeer->input() : MTP_inputPeerEmpty()),
 						MTP_vector_from_range(
@@ -3451,7 +3451,7 @@ void Widget::searchMore() {
 								? Flag()
 								: Flag::f_saved_reaction)),
 						peer->input(),
-						MTP_string(_searchQuery),
+						MTP_string(SmartSearch::ExtractServerQuery(_searchQuery)),
 						(fromPeer ? fromPeer->input() : MTP_inputPeerEmpty()),
 						(savedPeer
 							? savedPeer->input()
@@ -3579,7 +3579,7 @@ void Widget::requestMessages(bool fromStart) {
 		// Results are merged on the client side:
 		//   - AND queries (multi-word): intersection — message must match ALL keywords
 		//   - OR queries (A|B): union — message must match ANY keyword
-		_searchProcess.serverKeywords = SmartSearch::ExtractKeywords(_searchQuery);
+		_searchProcess.serverKeywords = SmartSearch::ExtractServerQueries(_searchQuery);
 		if (_searchProcess.serverKeywords.isEmpty()) {
 			const auto trimmed = _searchQuery.trimmed();
 			if (!trimmed.isEmpty()) {
@@ -3588,6 +3588,7 @@ void Widget::requestMessages(bool fromStart) {
 		}
 		_searchProcess.serverKeywordIndex = 0;
 		_searchProcess.seenIds.clear();
+		_searchProcess.queries.clear();
 	}
 
 	// Request for the current keyword
@@ -3705,9 +3706,13 @@ void Widget::searchReceived(
 		not_null<SearchProcessState*> process,
 		bool cacheResults) {
 	const auto state = _inner->state();
+	const auto kwList = _searchProcess.serverKeywords;
+	const auto isMultiKeywordInProgress = !kwList.isEmpty()
+		&& (_searchProcess.serverKeywordIndex + 1 < int(kwList.size()));
 	if (!cacheResults
 		&& (state == WidgetState::Filtered)
-		&& type.start) {
+		&& type.start
+		&& !isMultiKeywordInProgress) {
 		const auto i = process->queries.find(process->requestId);
 		if (i != process->queries.end()) {
 			process->cache[i->second] = result;
@@ -3818,6 +3823,10 @@ void Widget::searchReceived(
 		return std::vector<not_null<HistoryItem*>>();
 	});
 	_inner->searchReceived(messages, inject, type, fullCount);
+
+	if (isMultiKeywordInProgress) {
+		process->full = false;
+	}
 
 	process->requestId = 0;
 	listScrollUpdated();

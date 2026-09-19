@@ -18,6 +18,9 @@ QString ExtractRegexPattern(const QString &query);
 // Extract clean server keyword query for MTProto API
 QString ExtractServerQuery(const QString &query);
 
+// Extract server query list for multi-keyword candidate retrieval
+QStringList ExtractServerQueries(const QString &query);
+
 // Extract all positive keywords from query for multi-query candidate retrieval
 QStringList ExtractKeywords(const QString &query);
 

@@ -177,6 +177,6 @@ void IconPicker::mousePressEvent(QMouseEvent *e) {
 	if (changed) {
 		applyIcon();
 
-		repaint();
+		update();
 	}
 }

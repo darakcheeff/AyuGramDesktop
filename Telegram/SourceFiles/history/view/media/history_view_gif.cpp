@@ -311,18 +311,21 @@ QSize Gif::sizeForAspectRatio() const {
 
 QSize Gif::countThumbSize(int &inOutWidthMax) const {
 	const auto hostedInstantView = IsHostedInstantViewMedia(_parent);
+	const auto isAdaptive = (_parent->hasVisibleText() || _parent->Get<FakeBotAboutTop>())
+		&& _parent->hasBubble()
+		&& !_data->isVideoMessage();
 	const auto maxSize = [&] {
-		if (hostedInstantView) {
+		if (hostedInstantView || isAdaptive) {
 			return std::max(inOutWidthMax, 1);
 		} else if (_data->isVideoFile()) {
-			return st::maxMediaSize;
+			return int(st::maxMediaSize);
 		} else if (_data->isVideoMessage()) {
-			return st::maxVideoMessageSize;
+			return int(st::maxVideoMessageSize);
 		}
-		return st::maxGifSize;
+		return int(st::maxGifSize);
 	}();
 	const auto size = style::ConvertScale(videoSize());
-	if (hostedInstantView) {
+	if (hostedInstantView || isAdaptive) {
 		inOutWidthMax = std::max(inOutWidthMax, 1);
 	} else {
 		accumulate_min(inOutWidthMax, maxSize);
@@ -343,8 +346,13 @@ QSize Gif::countOptimalSize() {
 		return forced;
 	}
 	const auto hostedInstantView = IsHostedInstantViewMedia(_parent);
+	const auto isAdaptive = (_parent->hasVisibleText() || _parent->Get<FakeBotAboutTop>())
+		&& _parent->hasBubble()
+		&& !_data->isVideoMessage();
 	const auto maxMediaWidth = hostedInstantView
 		? std::max(st::msgMaxWidth, st::maxMediaSize)
+		: isAdaptive
+		? std::max(st::maxMediaSize, 2000)
 		: st::maxMediaSize;
 	const auto minWidth = std::clamp(
 		_parent->minWidthForMedia(),
@@ -352,7 +360,9 @@ QSize Gif::countOptimalSize() {
 			? st::historyPhotoBubbleMinWidth
 			: st::minPhotoSize),
 		maxMediaWidth);
-	auto thumbMaxWidth = st::msgMaxWidth;
+	auto thumbMaxWidth = isAdaptive
+		? std::max(int(st::msgMaxWidth), 2000)
+		: st::msgMaxWidth;
 	const auto scaled = countThumbSize(thumbMaxWidth);
 	auto maxWidth = std::min(
 		std::max(scaled.width(), minWidth),
@@ -365,9 +375,13 @@ QSize Gif::countOptimalSize() {
 				+ 2 * (st::msgDateImgDelta + st::msgDateImgPadding.x()));
 	}
 	if (_parent->hasBubble()) {
-		maxWidth = qMax(maxWidth, _parent->textualMaxWidth());
+		const auto botTop = _parent->Get<FakeBotAboutTop>();
+		const auto captionMaxWidth = _parent->textualMaxWidth();
+		if (_parent->hasVisibleText() || botTop) {
+			maxWidth = std::max({ maxWidth, captionMaxWidth, int(st::msgMaxWidth) });
+		}
 		minHeight = adjustHeightForLessCrop(
-			scaled,
+			videoSize(),
 			{ maxWidth, minHeight });
 	} else if (isUnwrapped()) {
 		const auto item = _parent->data();
@@ -394,7 +408,7 @@ QSize Gif::countCurrentSize(int newWidth) {
 	_ephemeral.topAdded = 0;
 
 	const auto hostedInstantView = IsHostedInstantViewMedia(_parent);
-	auto thumbMaxWidth = newWidth;
+	auto thumbMaxWidth = std::max(newWidth, 1);
 	const auto scaled = countThumbSize(thumbMaxWidth);
 	const auto minWidthByInfo = hostedInstantView
 		? _parent->minWidthForMedia()
@@ -424,7 +438,7 @@ QSize Gif::countCurrentSize(int newWidth) {
 			: captionMaxWidth;
 		newWidth = qMin(qMax(newWidth, maxWithCaption), thumbMaxWidth);
 		newHeight = adjustHeightForLessCrop(
-			scaled,
+			videoSize(),
 			{ newWidth, newHeight });
 	} else if (isUnwrapped()) {
 		accumulate_max(newWidth, _parent->reactionsOptimalWidth());
@@ -479,16 +493,13 @@ QSize Gif::countCurrentSize(int newWidth) {
 }
 
 int Gif::adjustHeightForLessCrop(QSize dimensions, QSize current) const {
-	if (dimensions.isEmpty()) {
+	if (dimensions.isEmpty()
+		|| !::Media::Streaming::FrameResizeMayExpand(current, dimensions)) {
 		return current.height();
 	}
-	// Allow some more vertical space for less cropping,
-	// but not more than 1.33 * existing height.
 	return qMax(
 		current.height(),
-		qMin(
-			current.width() * dimensions.height() / dimensions.width(),
-			current.height() * 4 / 3));
+		current.width() * dimensions.height() / dimensions.width());
 }
 
 QSize Gif::videoSize() const {

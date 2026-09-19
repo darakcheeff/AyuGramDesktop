@@ -16,6 +16,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history.h"
 #include "history/history_item.h"
 #include "main/main_session.h"
+#include "ayu/utils/smart_search.h"
 
 namespace Api {
 namespace {
@@ -24,7 +25,8 @@ constexpr auto kSearchPerPage = 50;
 
 [[nodiscard]] MessageIdsList HistoryItemsFromTL(
 		not_null<Data::Session*> data,
-		const QVector<MTPMessage> &messages) {
+		const QVector<MTPMessage> &messages,
+		const QString &query) {
 	auto result = MessageIdsList();
 	for (const auto &message : messages) {
 		const auto peerId = PeerFromMessage(message);
@@ -34,7 +36,9 @@ constexpr auto kSearchPerPage = 50;
 					message,
 					MessageFlags(),
 					NewMessageType::Existing);
-				result.push_back(item->fullId());
+				if (query.isEmpty() || SmartSearch::Matches(item->originalText().text, query)) {
+					result.push_back(item->fullId());
+				}
 			}
 		} else {
 			LOG(("API Error: a search results with not loaded peer %1"
@@ -120,7 +124,7 @@ void MessagesSearch::searchRequest() {
 				| (_request.topMsgId ? Flag::f_top_msg_id : Flag())
 				| (_request.tags.empty() ? Flag() : Flag::f_saved_reaction)),
 			_history->peer->input(),
-			MTP_string(_request.query),
+			MTP_string(SmartSearch::ExtractServerQuery(_request.query)),
 			(fromPeer ? fromPeer->input() : MTP_inputPeerEmpty()),
 			(savedPeer ? savedPeer->input() : MTP_inputPeerEmpty()),
 			MTP_vector_from_range(_request.tags | ranges::views::transform(
@@ -175,7 +179,7 @@ void MessagesSearch::searchReceived(
 			owner.processChats(data.vchats());
 			_history->peer->processTopics(data.vtopics());
 		}
-		auto items = HistoryItemsFromTL(&owner, data.vmessages().v);
+		auto items = HistoryItemsFromTL(&owner, data.vmessages().v, _request.query);
 		const auto total = int(data.vmessages().v.size());
 		return FoundMessages{ total, std::move(items), nextToken };
 	}, [&](const MTPDmessages_messagesSlice &data) {
@@ -185,7 +189,7 @@ void MessagesSearch::searchReceived(
 			owner.processChats(data.vchats());
 			_history->peer->processTopics(data.vtopics());
 		}
-		auto items = HistoryItemsFromTL(&owner, data.vmessages().v);
+		auto items = HistoryItemsFromTL(&owner, data.vmessages().v, _request.query);
 		// data.vnext_rate() is used only in global search.
 		const auto total = int(data.vcount().v);
 		return FoundMessages{ total, std::move(items), nextToken };
@@ -203,7 +207,7 @@ void MessagesSearch::searchReceived(
 			}
 			_history->peer->processTopics(data.vtopics());
 		}
-		auto items = HistoryItemsFromTL(&owner, data.vmessages().v);
+		auto items = HistoryItemsFromTL(&owner, data.vmessages().v, _request.query);
 		const auto total = int(data.vcount().v);
 		return FoundMessages{ total, std::move(items), nextToken };
 	}, [](const MTPDmessages_messagesNotModified &data) {
@@ -213,9 +217,16 @@ void MessagesSearch::searchReceived(
 		_cacheOfStartByToken.emplace(nextToken, result);
 	}
 	_requestId = 0;
-	_offsetId = found.messages.empty()
-		? MsgId()
-		: found.messages.back().msg;
+	const auto lastServerMsgId = result.match([&](const MTPDmessages_messages &d) {
+		return d.vmessages().v.empty() ? MsgId() : IdFromMessage(d.vmessages().v.back());
+	}, [&](const MTPDmessages_messagesSlice &d) {
+		return d.vmessages().v.empty() ? MsgId() : IdFromMessage(d.vmessages().v.back());
+	}, [&](const MTPDmessages_channelMessages &d) {
+		return d.vmessages().v.empty() ? MsgId() : IdFromMessage(d.vmessages().v.back());
+	}, [](const MTPDmessages_messagesNotModified &) {
+		return MsgId();
+	});
+	_offsetId = lastServerMsgId;
 	_messagesFounds.fire(std::move(found));
 }
 

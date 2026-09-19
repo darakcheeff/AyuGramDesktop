@@ -963,9 +963,7 @@ void ChatFilters::saveOrder(
 		)).afterRequest(_saveOrderAfterId).send();
 	}
 
-	if (ranges::any_of(order, IsLocalFilterId)) {
-		AyuCloudSync::scheduleSync(&_owner->session());
-	}
+	AyuCloudSync::scheduleSync(&_owner->session());
 }
 
 bool ChatFilters::archiveNeeded() const {

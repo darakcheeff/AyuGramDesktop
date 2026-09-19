@@ -537,9 +537,20 @@ bool RepliesList::isServerThread() {
 		return true;
 	}
 	if (const auto root = lookupRoot()) {
-		if (root->lookupDiscussionPostOriginal() || root->repliesAreComments()) {
+		if (root->isDiscussionPost()
+			|| (root->discussionPostOriginalSender() != nullptr)
+			|| root->lookupDiscussionPostOriginal()
+			|| root->repliesAreComments()
+			|| (root->repliesCount() > 0)) {
 			return true;
 		}
+		if (const auto forwarded = root->Get<HistoryMessageForwarded>()) {
+			if (forwarded->savedFromPeer && forwarded->savedFromPeer->isChannel()) {
+				return true;
+			}
+		}
+	} else if (_history->peer->isChannel()) {
+		return true;
 	}
 	return false;
 }
