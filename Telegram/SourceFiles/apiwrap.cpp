@@ -514,7 +514,9 @@ void ApiWrap::toggleHistoryArchived(
 			}
 		}
 		if (const auto data = _historyArchivedRequests.take(history)) {
-			data->second();
+			if (data->second) {
+				data->second();
+			}
 		}
 		if (isPinned) {
 			_session->data().notifyPinnedDialogsOrderUpdated();

@@ -581,7 +581,12 @@ not_null<Ui::VerticalLayout*> SetupFoldersList(
 		const auto saveAnd = [=](
 				const Data::ChatFilter &data,
 				Fn<void(Data::ChatFilter)> next) {
-			doneCallback(data);
+			if (const auto button = *created) {
+				find(button)->filter = data;
+				button->updateData(data);
+			} else {
+				*created = addFilter(data);
+			}
 			state->save(*created, next);
 		};
 		controller->window().show(Box(
@@ -826,6 +831,7 @@ void SetupRecommendedSection(
 	const auto addFilter = [=](const Data::ChatFilter &filter) {
 		const auto button = filtersWrap->add(
 			object_ptr<FilterRowButton>(filtersWrap, session, filter));
+		state->rows.push_back({ filter, button });
 		button->removeRequests(
 		) | rpl::on_next([=] {
 			const auto row = find(button);
@@ -1261,7 +1267,7 @@ Folders::Folders(
 }
 
 Folders::~Folders() {
-	if (_state->save) {
+	if (!Core::Quitting() && _state->save) {
 		_state->save(nullptr, nullptr);
 	}
 }

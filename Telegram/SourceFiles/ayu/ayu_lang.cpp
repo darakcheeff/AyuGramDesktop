@@ -125,8 +125,8 @@ void AyuLanguage::fetchLanguage(const QString &id, const QString &baseId) {
 			needFallback ? baseId : finalLangPackId));
 	}
 	_chkReply = networkManager.get(QNetworkRequest(url));
-	connect(_chkReply, SIGNAL(error(QNetworkReply::NetworkError)), this, SLOT(fetchError(QNetworkReply::NetworkError)));
-	connect(_chkReply, SIGNAL(finished()), this, SLOT(fetchFinished()));
+	connect(_chkReply, &QNetworkReply::errorOccurred, this, &AyuLanguage::fetchError);
+	connect(_chkReply, &QNetworkReply::finished, this, &AyuLanguage::fetchFinished);
 }
 
 void AyuLanguage::fetchFinished() {

@@ -121,7 +121,7 @@ private:
 		_session->data().notifySettings().update(ch, Data::MuteValue{ .forever = true });
 		const auto history = _session->data().history(ch);
 		if (!history->folder() || history->folder()->id() != Data::Folder::kId) {
-			_session->api().toggleHistoryArchived(history, true, nullptr);
+			_session->api().toggleHistoryArchived(history, true, [] {});
 		}
 	}
 
