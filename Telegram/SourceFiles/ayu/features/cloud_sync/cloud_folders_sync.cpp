@@ -55,7 +55,7 @@ public:
 
 		// Subscribe to chat filters changes so ANY folder modification automatically triggers sync
 		_session->data().chatsFilters().changed(
-		) | rpl::start_with_next([=] {
+		) | rpl::on_next([=] {
 			scheduleSync();
 		}, _lifetime);
 
