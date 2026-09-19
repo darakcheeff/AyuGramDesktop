@@ -263,9 +263,6 @@ void AddAyuGramActions(PeerData *peerData,
 	const auto showFilters = settings.filtersEnabled()
 		&& (!user || user->isBot());
 	const auto saveDeletedMessages = settings.saveDeletedMessages();
-	if (!showFilters && !saveDeletedMessages && !user) {
-		return;
-	}
 
 	const auto topic = peerData->isForum() && thread ? thread->asTopic() : nullptr;
 	const auto topicId = topic ? topic->rootId().bare : 0;
@@ -276,6 +273,39 @@ void AddAyuGramActions(PeerData *peerData,
 		.icon = &st::menuIconGroupReactions,
 		.fillSubmenu = [=](not_null<Ui::PopupMenu*> menu) {
 			const auto addAction = Ui::Menu::CreateAddActionCallback(menu);
+			if (user) {
+				addAction(
+					QString::fromUtf8("👤 Подписаться на посты пользователя..."),
+					[=]
+					{
+						AyuWatchers::ShowUserWatcherSubscribeBox(sessionController, user);
+					},
+					&st::menuIconNotifications);
+				addAction(
+					QString::fromUtf8("🌐 Найти сообщения в общих чатах..."),
+					[=]
+					{
+						AyuWatchers::ShowUserGlobalSearchBox(sessionController, user);
+					},
+					&st::menuIconSearch);
+			} else {
+				addAction(
+					(peerData->isChannel() && !peerData->isMegagroup())
+						? QString::fromUtf8("📢 Подписка на уведомления канала...")
+						: QString::fromUtf8("🔔 Подписка на уведомления группы..."),
+					[=]
+					{
+						AyuWatchers::ShowPeerWatcherSubscribeBox(sessionController, peerData);
+					},
+					&st::menuIconNotifications);
+			}
+			addAction(
+				QString::fromUtf8("⚙️ Правила мониторинга ключевых слов..."),
+				[=]
+				{
+					AyuWatchers::ShowWatchersBox(sessionController, peerData);
+				},
+				&st::menuIconSettings);
 			if (showFilters) {
 				addAction(
 					tr::ayu_ViewFiltersMenuText(tr::now),
@@ -287,29 +317,6 @@ void AddAyuGramActions(PeerData *peerData,
 						sessionController->showSettings(Settings::AyuFiltersList::Id());
 					},
 					&st::menuIconAddToFolder);
-			}
-			addAction(
-				QString::fromUtf8("🔔 Мониторинг ключевых слов..."),
-				[=]
-				{
-					AyuWatchers::ShowWatchersBox(sessionController, peerData);
-				},
-				&st::menuIconNotifications);
-			if (user) {
-				addAction(
-					QString::fromUtf8("🌐 Найти сообщения в общих чатах..."),
-					[=]
-					{
-						AyuWatchers::ShowUserGlobalSearchBox(sessionController, user);
-					},
-					&st::menuIconSearch);
-				addAction(
-					QString::fromUtf8("👤 Подписаться на посты пользователя..."),
-					[=]
-					{
-						AyuWatchers::ShowUserWatcherSubscribeBox(sessionController, user);
-					},
-					&st::menuIconNotifications);
 			}
 			const auto filteredToggleShown = FiltersController::filteredMessagesShown(peerData);
 			if (filteredToggleShown) {

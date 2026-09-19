@@ -1858,6 +1858,7 @@ void Filler::fillContextMenuActions() {
 		addInfo();
 	}
 	addToggleMuteSubmenu(false);
+	AyuUi::AddAyuGramActions(_peer, _thread, _controller, _addAction);
 	addToggleUnreadMark();
 	addToggleTopicClosed();
 	addToggleFolder();

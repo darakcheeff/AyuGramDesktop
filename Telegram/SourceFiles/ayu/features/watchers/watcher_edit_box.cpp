@@ -44,6 +44,10 @@ void ShowWatcherEditBox(
 			boxTitle = isNew
 				? QString::fromUtf8("Подписка на автора")
 				: QString::fromUtf8("Редактировать подписку");
+		} else if (rule.peerId != 0) {
+			boxTitle = isNew
+				? QString::fromUtf8("Подписка на уведомления")
+				: QString::fromUtf8("Редактировать подписку");
 		} else {
 			boxTitle = isNew
 				? QString::fromUtf8("Добавить правило мониторинга")
@@ -53,7 +57,7 @@ void ShowWatcherEditBox(
 
 		const auto content = box->verticalLayout();
 
-		// Author Info Banner (if rule is bound to a user)
+		// Info Banner
 		if (hasUser) {
 			const auto authorInfo = QString::fromUtf8("👤 Автор: ")
 				+ (rule.senderName.isEmpty() ? QString::number(rule.senderUserId) : rule.senderName)
@@ -65,12 +69,22 @@ void ShowWatcherEditBox(
 					authorInfo,
 					st::boxLabel),
 				st::settingsCheckboxPadding);
+		} else if (rule.peerId != 0 && !rule.peerName.isEmpty()) {
+			const auto chatInfo = QString::fromUtf8("📢 Чат / Канал: ") + rule.peerName;
+			box->addRow(
+				object_ptr<Ui::FlatLabel>(
+					content,
+					chatInfo,
+					st::boxLabel),
+				st::settingsCheckboxPadding);
 		}
 
 		// Rule Title
 		const auto titlePlaceholder = hasUser
 			? QString::fromUtf8("Название подписки (напр. Посты ") + rule.senderName + u")"_q
-			: QString::fromUtf8("Название правила (напр. Важное, Крипта)");
+			: (rule.peerId != 0
+				? QString::fromUtf8("Название подписки (напр. ") + rule.peerName + u")"_q
+				: QString::fromUtf8("Название правила (напр. Важное, Крипта)"));
 		const auto titleField = box->addRow(
 			object_ptr<Ui::InputField>(
 				content,
@@ -80,8 +94,8 @@ void ShowWatcherEditBox(
 			st::settingsCheckboxPadding);
 
 		// Regex Pattern
-		const auto regexPlaceholder = hasUser
-			? QString::fromUtf8("Фильтр слов (необязательно, оставьте пустым для всех постов)")
+		const auto regexPlaceholder = (hasUser || rule.peerId != 0)
+			? QString::fromUtf8("Фильтр слов (необязательно, оставьте пустым для всех сообщений)")
 			: QString::fromUtf8("Ключевые слова или Regex (напр. биткоин|btc|eth)");
 		const auto regexField = box->addRow(
 			object_ptr<Ui::InputField>(
@@ -224,7 +238,7 @@ void ShowWatcherEditBox(
 		// Save handler
 		auto saveAndClose = [=, rId = rule.id, pId = rule.peerId, pName = rule.peerName, count = rule.matchCount, sId = rule.senderUserId, sUser = rule.senderUsername, sName = rule.senderName]() mutable {
 			const auto rxText = regexField->getTextWithTags().text.trimmed();
-			if (rxText.isEmpty() && sId == 0) {
+			if (rxText.isEmpty() && sId == 0 && pId == 0) {
 				errorWrap->entity()->setText(QString::fromUtf8("Введите ключевые слова или регулярное выражение"));
 				errorWrap->show(anim::type::normal);
 				return;
@@ -329,6 +343,23 @@ void ShowUserWatcherSubscribeBox(
 		r.peerId = peer->id.value;
 		r.peerName = peer->name();
 	}
+	r.notifyBypassMute = true;
+	r.forwardToChat = false;
+	r.trackCounter = true;
+	r.sendWebhook = false;
+
+	ShowWatcherEditBox(controller, r);
+}
+
+void ShowPeerWatcherSubscribeBox(
+		not_null<Window::SessionController*> controller,
+		not_null<PeerData*> peer) {
+	WatcherRule r;
+	r.title = (peer->isChannel() && !peer->isMegagroup())
+		? (QString::fromUtf8("Канал: ") + peer->name())
+		: (QString::fromUtf8("Чат: ") + peer->name());
+	r.peerId = peer->id.value;
+	r.peerName = peer->name();
 	r.notifyBypassMute = true;
 	r.forwardToChat = false;
 	r.trackCounter = true;

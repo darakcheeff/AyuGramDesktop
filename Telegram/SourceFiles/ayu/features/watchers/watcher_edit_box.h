@@ -33,4 +33,8 @@ void ShowUserWatcherSubscribeBox(
 	not_null<UserData*> user,
 	PeerData *peer = nullptr);
 
+void ShowPeerWatcherSubscribeBox(
+	not_null<Window::SessionController*> controller,
+	not_null<PeerData*> peer);
+
 } // namespace AyuWatchers
