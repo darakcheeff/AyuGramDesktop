@@ -951,7 +951,7 @@ void ApiWrap::requestMoreDialogs(Data::Folder *folder) {
 		const auto userId = _session->userId().bare & PeerId::kChatTypeMask;
 		const auto cached = AyuMessages::getCachedDialogs(userId, folderId);
 		if (!cached.empty()) {
-			const auto cachedResult = AyuMapper::deserializeObject<MTPmessages_Dialogs>(cached);
+			const auto cachedResult = AyuMapper::deserializeDialogs(cached);
 			cachedResult.match([](const MTPDmessages_dialogsNotModified &) {}, [&](const auto &data) {
 				_session->data().processUsers(data.vusers());
 				_session->data().processChats(data.vchats());
@@ -1012,7 +1012,7 @@ void ApiWrap::requestMoreDialogs(Data::Folder *folder) {
 		if (firstLoad) {
 			const auto folderId = folder ? folder->id() : 0;
 			const auto userId = _session->userId().bare & PeerId::kChatTypeMask;
-			AyuMessages::saveCachedDialogs(userId, folderId, AyuMapper::serializeObject(result));
+			AyuMessages::saveCachedDialogs(userId, folderId, AyuMapper::serializeDialogs(result));
 		}
 
 		if (!folder

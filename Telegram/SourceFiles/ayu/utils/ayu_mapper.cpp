@@ -72,6 +72,17 @@ MTPObject deserializeObject(std::vector<char> serialized) {
 	return data;
 }
 
+std::vector<char> serializeDialogs(const MTPmessages_Dialogs &dialogs) {
+	return serializeObject(dialogs);
+}
+
+MTPmessages_Dialogs deserializeDialogs(const std::vector<char> &serialized) {
+	return deserializeObject<MTPmessages_Dialogs>(serialized);
+}
+
+template std::vector<char> serializeObject<MTPmessages_Dialogs>(MTPmessages_Dialogs);
+template MTPmessages_Dialogs deserializeObject<MTPmessages_Dialogs>(std::vector<char>);
+
 std::pair<std::string, std::vector<char>> serializeTextWithEntities(not_null<HistoryItem*> item) {
 	if (item->emptyText()) {
 		return std::make_pair("", std::vector<char>());

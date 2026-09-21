@@ -16,6 +16,9 @@ template<typename MTPObject>
 template<typename MTPObject>
 [[nodiscard]] std::vector<char> serializeObject(MTPObject object);
 
+[[nodiscard]] std::vector<char> serializeDialogs(const MTPmessages_Dialogs &dialogs);
+[[nodiscard]] MTPmessages_Dialogs deserializeDialogs(const std::vector<char> &serialized);
+
 std::pair<std::string, std::vector<char>> serializeTextWithEntities(not_null<HistoryItem*> item);
 [[nodiscard]] MTPVector<MTPMessageEntity> deserializeTextWithEntities(std::vector<char> serialized);
 int mapItemFlagsToMTPFlags(not_null<HistoryItem*> item);
