@@ -4876,7 +4876,7 @@ void HistoryWidget::firstLoadMessages() {
 	_firstLoadRequest = histories.sendRequest(history, type, [=](
 			Fn<void()> finish) {
 		if (AyuMessages::isOffline(&history->session())) {
-			const auto local = AyuMessages::getLocalMTPMessages(history->peer, _topic ? _topic->rootId().bare : 0, 0, 0, 50);
+			const auto local = AyuMessages::getLocalMTPMessages(history->peer, 0, 0, 0, 50);
 			const auto count = local.match([](const MTPDmessages_messages &d) {
 				return int(d.vmessages().v.size());
 			}, [](const auto &) {
@@ -4949,7 +4949,7 @@ void HistoryWidget::loadMessages() {
 	_preloadRequest = histories.sendRequest(history, type, [=](
 			Fn<void()> finish) {
 		if (AyuMessages::isOffline(&history->session())) {
-			const auto local = AyuMessages::getLocalMTPMessages(history->peer, _topic ? _topic->rootId().bare : 0, 0, offsetId.bare, loadCount);
+			const auto local = AyuMessages::getLocalMTPMessages(history->peer, 0, 0, offsetId.bare, loadCount);
 			const auto count = local.match([](const MTPDmessages_messages &d) {
 				return int(d.vmessages().v.size());
 			}, [](const auto &) {
