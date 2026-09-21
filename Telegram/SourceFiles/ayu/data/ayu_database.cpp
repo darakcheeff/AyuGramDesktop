@@ -155,6 +155,13 @@ auto storage = make_storage(
 		make_column("flags", &DeletedDialog::flags),
 		make_column("entityCreateDate", &DeletedDialog::entityCreateDate)
 	),
+	make_table<CachedDialogs>(
+		"CachedDialogs",
+		make_column("fakeId", &CachedDialogs::fakeId, primary_key().autoincrement()),
+		make_column("userId", &CachedDialogs::userId),
+		make_column("folderId", &CachedDialogs::folderId),
+		make_column("serialized", &CachedDialogs::serialized)
+	),
 	make_table<RegexFilter>(
 		"RegexFilter",
 		make_column("id", &RegexFilter::id, primary_key()),
@@ -512,6 +519,42 @@ void clearLocalMessages(int olderThanSecs) {
 	} catch (std::exception &ex) {
 		LOG(("Failed to clear local messages: %1").arg(ex.what()));
 	}
+}
+
+void saveCachedDialogs(ID userId, int folderId, const std::vector<char> &serialized) {
+	try {
+		storage.remove_all<CachedDialogs>(
+			where(
+				column<CachedDialogs>(&CachedDialogs::userId) == userId and
+				column<CachedDialogs>(&CachedDialogs::folderId) == folderId
+			)
+		);
+		CachedDialogs row;
+		row.userId = userId;
+		row.folderId = folderId;
+		row.serialized = serialized;
+		storage.insert(row);
+	} catch (const std::exception &ex) {
+		LOG(("Failed to save cached dialogs: %1").arg(ex.what()));
+	}
+}
+
+std::vector<char> getCachedDialogs(ID userId, int folderId) {
+	try {
+		auto rows = storage.get_all<CachedDialogs>(
+			where(
+				column<CachedDialogs>(&CachedDialogs::userId) == userId and
+				column<CachedDialogs>(&CachedDialogs::folderId) == folderId
+			),
+			limit(1)
+		);
+		if (!rows.empty()) {
+			return std::move(rows.front().serialized);
+		}
+	} catch (const std::exception &ex) {
+		LOG(("Failed to get cached dialogs: %1").arg(ex.what()));
+	}
+	return {};
 }
 
 template<typename T>

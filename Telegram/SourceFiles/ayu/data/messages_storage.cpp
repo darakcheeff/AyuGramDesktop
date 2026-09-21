@@ -16,6 +16,8 @@
 #include "history/history_item.h"
 #include "history/history_item_components.h"
 #include "main/main_session.h"
+#include "main/main_account.h"
+#include "mtproto/facade.h"
 
 namespace AyuMessages {
 
@@ -36,7 +38,9 @@ void map(not_null<HistoryItem*> item, AyuMessageBase &message) {
 	message.dialogId = getDialogIdFromPeer(item->history()->peer);
 	message.groupedId = item->groupId().raw();
 	message.peerId = item->history()->peer->id.value & PeerId::kChatTypeMask;
-	message.fromId = item->from()->id.value & PeerId::kChatTypeMask;
+	message.fromId = item->from()
+		? (item->from()->id.value & PeerId::kChatTypeMask)
+		: (item->history()->peer->id.value & PeerId::kChatTypeMask);
 	message.topicId = item->topicRootId().bare;
 	message.messageId = item->id.bare;
 	message.date = item->date();
@@ -186,6 +190,21 @@ MTPmessages_Messages getLocalMTPMessages(not_null<PeerData*> peer, ID topicId, I
 		MTP_vector<MTPChat>(),
 		MTP_vector<MTPUser>()
 	);
+}
+
+void saveCachedDialogs(ID userId, int folderId, const std::vector<char> &serialized) {
+	crl::async([userId, folderId, serialized] {
+		AyuDatabase::saveCachedDialogs(userId, folderId, serialized);
+	});
+}
+
+std::vector<char> getCachedDialogs(ID userId, int folderId) {
+	return AyuDatabase::getCachedDialogs(userId, folderId);
+}
+
+bool isOffline(not_null<Main::Session*> session) {
+	const auto state = session->account().mtp().dcstate();
+	return (state == MTP::ConnectingState || state == MTP::DisconnectedState || (state < 0 && state > -600));
 }
 
 } // namespace AyuMessages

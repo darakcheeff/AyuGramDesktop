@@ -76,6 +76,15 @@ public:
 	int entityCreateDate;
 };
 
+class CachedDialogs
+{
+public:
+	ID fakeId;
+	ID userId;
+	int folderId;
+	std::vector<char> serialized;
+};
+
 class RegexFilter
 {
 public:

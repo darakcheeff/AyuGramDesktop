@@ -4875,6 +4875,21 @@ void HistoryWidget::firstLoadMessages() {
 	auto &histories = history->owner().histories();
 	_firstLoadRequest = histories.sendRequest(history, type, [=](
 			Fn<void()> finish) {
+		if (AyuMessages::isOffline(&history->session())) {
+			const auto local = AyuMessages::getLocalMTPMessages(history->peer, _topic ? _topic->rootId().bare : 0, 0, 0, 50);
+			const auto count = local.match([](const MTPDmessages_messages &d) {
+				return int(d.vmessages().v.size());
+			}, [](const auto &) {
+				return 0;
+			});
+			if (count > 0) {
+				crl::on_main(this, [=] {
+					messagesReceived(history->peer, local, _firstLoadRequest);
+					finish();
+				});
+				return 0;
+			}
+		}
 		return history->session().api().request(MTPmessages_GetHistory(
 			history->peer->input(),
 			MTP_int(offsetId),
@@ -4933,6 +4948,21 @@ void HistoryWidget::loadMessages() {
 	auto &histories = history->owner().histories();
 	_preloadRequest = histories.sendRequest(history, type, [=](
 			Fn<void()> finish) {
+		if (AyuMessages::isOffline(&history->session())) {
+			const auto local = AyuMessages::getLocalMTPMessages(history->peer, _topic ? _topic->rootId().bare : 0, 0, offsetId.bare, loadCount);
+			const auto count = local.match([](const MTPDmessages_messages &d) {
+				return int(d.vmessages().v.size());
+			}, [](const auto &) {
+				return 0;
+			});
+			if (count > 0) {
+				crl::on_main(this, [=] {
+					messagesReceived(history->peer, local, _preloadRequest);
+					finish();
+				});
+				return 0;
+			}
+		}
 		return history->session().api().request(MTPmessages_GetHistory(
 			history->peer->input(),
 			MTP_int(offsetId),

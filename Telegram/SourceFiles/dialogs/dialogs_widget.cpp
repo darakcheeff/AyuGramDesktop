@@ -3424,6 +3424,15 @@ void Widget::searchMore() {
 		return;
 	} else if (!process->full) {
 		if (const auto peer = searchInPeer()) {
+			if (AyuMessages::isOffline(&session())) {
+				process->full = true;
+				const auto type = SearchRequestType{
+					.start = !process->lastId,
+					.peer = true,
+				};
+				searchLocalFallback(type, process);
+				return;
+			}
 			auto &histories = session().data().histories();
 			const auto topic = searchInTopic();
 			const auto type = Data::Histories::RequestType::History;
@@ -3611,6 +3620,11 @@ void Widget::requestMessagesForKeyword(
 	const auto type = SearchRequestType{
 		.start = fromStart && (keywordIndex == 0),
 	};
+	if (AyuMessages::isOffline(&session())) {
+		_searchProcess.full = true;
+		searchLocalFallback(type, &_searchProcess);
+		return;
+	}
 	using Flag = MTPmessages_SearchGlobal::Flag;
 	const auto community = (_searchQueryTab == ChatSearchTab::ThisCommunity)
 		? _searchQueryCommunity
@@ -3876,6 +3890,7 @@ void Widget::searchLocalFallback(
 	const auto peer = searchInPeer();
 	const auto bases = AyuMessages::searchLocalMessages(&session(), query, peer, 50);
 	if (bases.empty()) {
+		searchApplyEmpty(type, process);
 		return;
 	}
 

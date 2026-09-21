@@ -110,6 +110,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ayu/ayu_worker.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "ayu/features/forward/ayu_forward.h"
+#include "ayu/data/messages_storage.h"
+#include "ayu/utils/ayu_mapper.h"
 
 
 namespace {
@@ -944,6 +946,24 @@ void ApiWrap::requestMoreDialogs(Data::Folder *folder) {
 	}
 
 	const auto firstLoad = !state->offsetDate;
+	if (firstLoad) {
+		const auto folderId = folder ? folder->id() : 0;
+		const auto userId = _session->userId().bare & PeerId::kChatTypeMask;
+		const auto cached = AyuMessages::getCachedDialogs(userId, folderId);
+		if (!cached.empty()) {
+			const auto cachedResult = AyuMapper::deserializeObject<MTPmessages_Dialogs>(cached);
+			cachedResult.match([](const MTPDmessages_dialogsNotModified &) {}, [&](const auto &data) {
+				_session->data().processUsers(data.vusers());
+				_session->data().processChats(data.vchats());
+				_session->data().applyDialogs(
+					folder,
+					data.vmessages().v,
+					data.vdialogs().v,
+					std::nullopt);
+				_session->data().chatsListChanged(folder);
+			});
+		}
+	}
 	const auto loadCount = firstLoad ? kDialogsFirstLoad : kDialogsPerPage;
 	const auto flags = MTPmessages_GetDialogs::Flag::f_exclude_pinned
 		| MTPmessages_GetDialogs::Flag::f_folder_id;
@@ -988,6 +1008,12 @@ void ApiWrap::requestMoreDialogs(Data::Folder *folder) {
 				data.vdialogs().v,
 				count);
 		});
+
+		if (firstLoad) {
+			const auto folderId = folder ? folder->id() : 0;
+			const auto userId = _session->userId().bare & PeerId::kChatTypeMask;
+			AyuMessages::saveCachedDialogs(userId, folderId, AyuMapper::serializeObject(result));
+		}
 
 		if (!folder
 			&& (!_dialogsLoadState || !_dialogsLoadState->listReceived)) {

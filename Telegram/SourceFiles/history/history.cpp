@@ -669,6 +669,7 @@ not_null<HistoryItem*> History::insertItem(
 
 	const auto result = i->get();
 	owner().registerMessage(result);
+	AyuMessages::addLocalMessage(result);
 
 	Ensures(ok);
 	return result;
