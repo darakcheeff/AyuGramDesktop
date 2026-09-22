@@ -3162,6 +3162,11 @@ bool Widget::search(bool inCache, SearchRequestDelay delay) {
 		_migratedProcess.full = false;
 		cancelSearchRequest();
 		if (inPeer) {
+			if (AyuMessages::isOffline(&session())) {
+				process->full = true;
+				searchLocalFallback(fromStartType, process);
+				return true;
+			}
 			const auto topic = searchInTopic();
 			auto &histories = session().data().histories();
 			const auto type = Data::Histories::RequestType::History;
@@ -3836,6 +3841,20 @@ void Widget::searchReceived(
 		process->full = true;
 		return std::vector<not_null<HistoryItem*>>();
 	});
+	if (messages.empty() && type.start && searchFromPeer()) {
+		const auto peer = searchInPeer();
+		const auto fromPeer = searchFromPeer();
+		const auto bases = AyuMessages::searchLocalMessages(&session(), _searchQuery.trimmed(), peer, fromPeer, 50);
+		if (!bases.empty()) {
+			QVector<MTPMessage> msgs;
+			msgs.reserve(bases.size());
+			for (const auto &b : bases) {
+				msgs.push_back(AyuMapper::toMTPMessage(b));
+			}
+			messages = processList(MTP_vector<MTPMessage>(msgs));
+			fullCount = messages.size();
+		}
+	}
 	_inner->searchReceived(messages, inject, type, fullCount);
 
 	if (isMultiKeywordInProgress) {
@@ -3872,6 +3891,12 @@ void Widget::searchFailed(
 		const MTP::Error &error,
 		not_null<SearchProcessState*> process) {
 	if (error.type() == u"SEARCH_QUERY_EMPTY"_q) {
+		if (searchFromPeer()) {
+			process->requestId = 0;
+			process->full = true;
+			searchLocalFallback(type, process);
+			return;
+		}
 		searchApplyEmpty(type, process);
 	} else {
 		process->requestId = 0;
@@ -3884,11 +3909,13 @@ void Widget::searchLocalFallback(
 		SearchRequestType type,
 		not_null<SearchProcessState*> process) {
 	const auto query = _searchQuery.trimmed();
-	if (query.isEmpty()) {
+	const auto peer = searchInPeer();
+	const auto fromPeer = searchFromPeer();
+	if (query.isEmpty() && !fromPeer) {
+		searchApplyEmpty(type, process);
 		return;
 	}
-	const auto peer = searchInPeer();
-	const auto bases = AyuMessages::searchLocalMessages(&session(), query, peer, 50);
+	const auto bases = AyuMessages::searchLocalMessages(&session(), query, peer, fromPeer, 50);
 	if (bases.empty()) {
 		searchApplyEmpty(type, process);
 		return;

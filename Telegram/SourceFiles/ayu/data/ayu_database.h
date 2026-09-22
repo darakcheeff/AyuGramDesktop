@@ -33,7 +33,7 @@ void clearDeletedMessages(ID userId, ID dialogId, ID topicId);
 
 void addLocalMessage(const LocalMessage &message);
 std::vector<LocalMessage> getLocalMessages(ID userId, ID dialogId, ID topicId, ID minId, ID maxId, int totalLimit);
-std::vector<LocalMessage> searchLocalMessages(ID userId, const std::string &searchQuery, ID dialogId = 0, int totalLimit = 50);
+std::vector<LocalMessage> searchLocalMessages(ID userId, const std::string &searchQuery, ID dialogId = 0, ID fromId = 0, int totalLimit = 50);
 void clearLocalMessages(int olderThanSecs = 0);
 void saveCachedDialogs(ID userId, int folderId, const std::vector<char> &serialized);
 std::vector<char> getCachedDialogs(ID userId, int folderId);

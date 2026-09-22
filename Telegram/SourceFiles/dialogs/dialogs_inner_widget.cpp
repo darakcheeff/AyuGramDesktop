@@ -4784,10 +4784,10 @@ void InnerWidget::searchReceived(
 	auto &results = toPreview ? _previewResults : _searchResults;
 	for (const auto &item : messages) {
 		const auto history = item->history();
-		if (_openedFolder && history->folder() != _openedFolder) {
+		if (globalSearch && _openedFolder && history->folder() != _openedFolder) {
 			continue;
 		}
-		if (_filterId > 0 && !history->inChatList(_filterId)) {
+		if (globalSearch && _filterId > 0 && !history->inChatList(_filterId)) {
 			continue;
 		}
 		if (!_searchState.query.isEmpty()) {

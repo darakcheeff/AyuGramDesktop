@@ -164,11 +164,12 @@ std::vector<AyuMessageBase> getLocalMessages(not_null<PeerData*> peer, ID topicI
 		AyuDatabase::getLocalMessages(userId, getDialogIdFromPeer(peer), topicId, minId, maxId, totalLimit));
 }
 
-std::vector<AyuMessageBase> searchLocalMessages(not_null<Main::Session*> session, const QString &query, PeerData *peer, int totalLimit) {
+std::vector<AyuMessageBase> searchLocalMessages(not_null<Main::Session*> session, const QString &query, PeerData *peer, PeerData *fromPeer, int totalLimit) {
 	const ID userId = session->userId().bare & PeerId::kChatTypeMask;
 	const ID dialogId = peer ? getDialogIdFromPeer(peer) : 0;
+	const ID fromId = fromPeer ? (fromPeer->id.value & PeerId::kChatTypeMask) : 0;
 	return convertToBase(
-		AyuDatabase::searchLocalMessages(userId, query.toStdString(), dialogId, totalLimit));
+		AyuDatabase::searchLocalMessages(userId, query.toStdString(), dialogId, fromId, totalLimit));
 }
 
 void clearLocalMessages(int olderThanSecs) {

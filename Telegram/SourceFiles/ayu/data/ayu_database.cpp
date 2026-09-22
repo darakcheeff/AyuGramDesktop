@@ -468,15 +468,18 @@ std::vector<LocalMessage> getLocalMessages(ID userId, ID dialogId, ID topicId, I
 	}
 }
 
-std::vector<LocalMessage> searchLocalMessages(ID userId, const std::string &searchQuery, ID dialogId, int totalLimit) {
+std::vector<LocalMessage> searchLocalMessages(ID userId, const std::string &searchQuery, ID dialogId, ID fromId, int totalLimit) {
 	try {
+		const auto hasQuery = !searchQuery.empty();
 		std::string escaped;
-		escaped.reserve(searchQuery.size());
-		for (const auto c : searchQuery) {
-			if (c == '%' || c == '_' || c == '\\') {
-				escaped += '\\';
+		if (hasQuery) {
+			escaped.reserve(searchQuery.size());
+			for (const auto c : searchQuery) {
+				if (c == '%' || c == '_' || c == '\\') {
+					escaped += '\\';
+				}
+				escaped += c;
 			}
-			escaped += c;
 		}
 		const auto pattern = "%" + escaped + "%";
 
@@ -485,7 +488,8 @@ std::vector<LocalMessage> searchLocalMessages(ID userId, const std::string &sear
 				where(
 					column<LocalMessage>(&LocalMessage::userId) == userId and
 					column<LocalMessage>(&LocalMessage::dialogId) == dialogId and
-					like(column<LocalMessage>(&LocalMessage::text), pattern, "\\")
+					(column<LocalMessage>(&LocalMessage::fromId) == fromId or fromId == 0) and
+					(like(column<LocalMessage>(&LocalMessage::text), pattern, "\\") or not hasQuery)
 				),
 				order_by(column<LocalMessage>(&LocalMessage::date)).desc(),
 				limit(totalLimit)
@@ -494,7 +498,8 @@ std::vector<LocalMessage> searchLocalMessages(ID userId, const std::string &sear
 			return storage.get_all<LocalMessage>(
 				where(
 					column<LocalMessage>(&LocalMessage::userId) == userId and
-					like(column<LocalMessage>(&LocalMessage::text), pattern, "\\")
+					(column<LocalMessage>(&LocalMessage::fromId) == fromId or fromId == 0) and
+					(like(column<LocalMessage>(&LocalMessage::text), pattern, "\\") or not hasQuery)
 				),
 				order_by(column<LocalMessage>(&LocalMessage::date)).desc(),
 				limit(totalLimit)

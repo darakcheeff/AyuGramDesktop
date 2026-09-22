@@ -23,7 +23,7 @@ void clearDeletedMessages(not_null<PeerData*> peer, ID topicId);
 
 void addLocalMessage(not_null<HistoryItem *> item);
 std::vector<AyuMessageBase> getLocalMessages(not_null<PeerData*> peer, ID topicId, ID minId, ID maxId, int totalLimit);
-std::vector<AyuMessageBase> searchLocalMessages(not_null<Main::Session*> session, const QString &query, PeerData *peer = nullptr, int totalLimit = 50);
+std::vector<AyuMessageBase> searchLocalMessages(not_null<Main::Session*> session, const QString &query, PeerData *peer = nullptr, PeerData *fromPeer = nullptr, int totalLimit = 50);
 void clearLocalMessages(int olderThanSecs = 0);
 MTPmessages_Messages getLocalMTPMessages(not_null<PeerData*> peer, ID topicId, ID minId, ID maxId, int totalLimit);
 void saveCachedDialogs(ID userId, int folderId, const std::vector<char> &serialized);
