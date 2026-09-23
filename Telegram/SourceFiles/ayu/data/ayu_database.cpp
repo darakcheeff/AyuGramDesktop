@@ -10,11 +10,111 @@
 #include "ayu/libs/sqlite/sqlite_orm.h"
 #include "base/unixtime.h"
 #include <mutex>
+#include <thread>
+#include <condition_variable>
+#include <queue>
+#include <future>
+#include <atomic>
+#include <functional>
 
 using namespace sqlite_orm;
 
 namespace {
+
 std::recursive_mutex storageMutex;
+
+class DatabaseWriter final {
+public:
+	static DatabaseWriter &instance() {
+		static DatabaseWriter writer;
+		return writer;
+	}
+
+	void postAsync(std::function<void()> task) {
+		{
+			const auto lock = std::lock_guard(_mutex);
+			_queue.push(std::move(task));
+		}
+		_cv.notify_one();
+	}
+
+	void postSync(std::function<void()> task) {
+		if (std::this_thread::get_id() == _workerThreadId.load()) {
+			task();
+			return;
+		}
+		auto promise = std::make_shared<std::promise<void>>();
+		auto future = promise->get_future();
+		postAsync([task = std::move(task), promise]() mutable {
+			try {
+				task();
+				promise->set_value();
+			} catch (...) {
+				promise->set_exception(std::current_exception());
+			}
+		});
+		future.get();
+	}
+
+	~DatabaseWriter() {
+		{
+			const auto lock = std::lock_guard(_mutex);
+			_stopping = true;
+		}
+		_cv.notify_one();
+		if (_worker.joinable()) {
+			_worker.join();
+		}
+	}
+
+private:
+	DatabaseWriter() {
+		_worker = std::thread([this] { run(); });
+	}
+
+	void run() {
+		_workerThreadId = std::this_thread::get_id();
+		while (true) {
+			std::function<void()> task;
+			{
+				std::unique_lock<std::mutex> lock(_mutex);
+				_cv.wait(lock, [this] {
+					return _stopping || !_queue.empty();
+				});
+				if (_stopping && _queue.empty()) {
+					break;
+				}
+				task = std::move(_queue.front());
+				_queue.pop();
+			}
+			if (task) {
+				try {
+					task();
+				} catch (const std::exception &ex) {
+					LOG(("AyuDatabase write error: %1").arg(ex.what()));
+				} catch (...) {
+					LOG(("AyuDatabase write unknown error"));
+				}
+			}
+		}
+	}
+
+	std::mutex _mutex;
+	std::condition_variable _cv;
+	std::queue<std::function<void()>> _queue;
+	std::atomic<bool> _stopping = false;
+	std::atomic<std::thread::id> _workerThreadId;
+	std::thread _worker;
+};
+
+void postWriteAsync(std::function<void()> task) {
+	DatabaseWriter::instance().postAsync(std::move(task));
+}
+
+void postWriteSync(std::function<void()> task) {
+	DatabaseWriter::instance().postSync(std::move(task));
+}
+
 } // namespace
 
 auto storage = make_storage(
@@ -285,6 +385,11 @@ void initialize() {
 	const auto lock = std::lock_guard(storageMutex);
 	try {
 		storage.sync_schema(true);
+		try {
+			storage.pragma.journal_mode(sqlite_orm::journal_mode::WAL);
+			storage.pragma.synchronous(1);
+		} catch (...) {
+		}
 
 		runMigrations(storage);
 
@@ -294,25 +399,34 @@ void initialize() {
 		moveCurrentDatabase();
 
 		storage.sync_schema(true);
+		try {
+			storage.pragma.journal_mode(sqlite_orm::journal_mode::WAL);
+			storage.pragma.synchronous(1);
+		} catch (...) {
+		}
+
 		if (!storage.get_pointer<SchemaVersion>(1)) {
 			storage.insert(SchemaVersion{1, 0});
 		}
 	}
+	DatabaseWriter::instance();
 }
 
 void addEditedMessage(const EditedMessage &message) {
-	const auto lock = std::lock_guard(storageMutex);
-	try {
-		storage.begin_transaction();
-		storage.insert(message);
-		storage.commit();
-	} catch (std::exception &ex) {
+	postWriteAsync([message] {
+		const auto lock = std::lock_guard(storageMutex);
 		try {
-			storage.rollback();
-		} catch (...) {
+			storage.begin_transaction();
+			storage.insert(message);
+			storage.commit();
+		} catch (std::exception &ex) {
+			try {
+				storage.rollback();
+			} catch (...) {
+			}
+			LOG(("Failed to save edited message for some reason: %1").arg(ex.what()));
 		}
-		LOG(("Failed to save edited message for some reason: %1").arg(ex.what()));
-	}
+	});
 }
 
 std::vector<EditedMessage> getEditedMessages(ID userId, ID dialogId, ID messageId, ID minId, ID maxId, int totalLimit) {
@@ -349,18 +463,20 @@ bool hasRevisions(ID userId, ID dialogId, ID messageId) {
 }
 
 void addDeletedMessage(const DeletedMessage &message) {
-	const auto lock = std::lock_guard(storageMutex);
-	try {
-		storage.begin_transaction();
-		storage.insert(message);
-		storage.commit();
-	} catch (std::exception &ex) {
+	postWriteAsync([message] {
+		const auto lock = std::lock_guard(storageMutex);
 		try {
-			storage.rollback();
-		} catch (...) {
+			storage.begin_transaction();
+			storage.insert(message);
+			storage.commit();
+		} catch (std::exception &ex) {
+			try {
+				storage.rollback();
+			} catch (...) {
+			}
+			LOG(("Failed to save deleted message for some reason: %1").arg(ex.what()));
 		}
-		LOG(("Failed to save edited message for some reason: %1").arg(ex.what()));
-	}
+	});
 }
 
 std::vector<DeletedMessage> getDeletedMessages(ID userId, ID dialogId, ID topicId, ID minId, ID maxId, int totalLimit, const std::string &searchQuery) {
@@ -421,48 +537,54 @@ bool hasDeletedMessages(ID userId, ID dialogId, ID topicId) {
 }
 
 void removeDeletedMessage(ID userId, ID dialogId, ID messageId) {
-	const auto lock = std::lock_guard(storageMutex);
-	try {
-		storage.remove_all<DeletedMessage>(
-			where(
-				column<DeletedMessage>(&DeletedMessage::userId) == userId and
-				column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId and
-				column<DeletedMessage>(&DeletedMessage::messageId) == messageId
-			)
-		);
-	} catch (std::exception &ex) {
-		LOG(("Failed to remove deleted message: %1").arg(ex.what()));
-	}
+	postWriteAsync([userId, dialogId, messageId] {
+		const auto lock = std::lock_guard(storageMutex);
+		try {
+			storage.remove_all<DeletedMessage>(
+				where(
+					column<DeletedMessage>(&DeletedMessage::userId) == userId and
+					column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId and
+					column<DeletedMessage>(&DeletedMessage::messageId) == messageId
+				)
+			);
+		} catch (std::exception &ex) {
+			LOG(("Failed to remove deleted message: %1").arg(ex.what()));
+		}
+	});
 }
 
 void clearDeletedMessages(ID userId, ID dialogId, ID topicId) {
-	const auto lock = std::lock_guard(storageMutex);
-	try {
-		storage.remove_all<DeletedMessage>(
-			where(
-				column<DeletedMessage>(&DeletedMessage::userId) == userId and
-				column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId and
-				(column<DeletedMessage>(&DeletedMessage::topicId) == topicId or topicId == 0)
-			)
-		);
-	} catch (std::exception &) {
-	}
+	postWriteAsync([userId, dialogId, topicId] {
+		const auto lock = std::lock_guard(storageMutex);
+		try {
+			storage.remove_all<DeletedMessage>(
+				where(
+					column<DeletedMessage>(&DeletedMessage::userId) == userId and
+					column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId and
+					(column<DeletedMessage>(&DeletedMessage::topicId) == topicId or topicId == 0)
+				)
+			);
+		} catch (std::exception &) {
+		}
+	});
 }
 
 void addLocalMessage(const LocalMessage &message) {
-	const auto lock = std::lock_guard(storageMutex);
-	try {
-		storage.remove_all<LocalMessage>(
-			where(
-				column<LocalMessage>(&LocalMessage::userId) == message.userId and
-				column<LocalMessage>(&LocalMessage::dialogId) == message.dialogId and
-				column<LocalMessage>(&LocalMessage::messageId) == message.messageId
-			)
-		);
-		storage.insert(message);
-	} catch (std::exception &ex) {
-		LOG(("Failed to save local message: %1").arg(ex.what()));
-	}
+	postWriteAsync([message] {
+		const auto lock = std::lock_guard(storageMutex);
+		try {
+			storage.remove_all<LocalMessage>(
+				where(
+					column<LocalMessage>(&LocalMessage::userId) == message.userId and
+					column<LocalMessage>(&LocalMessage::dialogId) == message.dialogId and
+					column<LocalMessage>(&LocalMessage::messageId) == message.messageId
+				)
+			);
+			storage.insert(message);
+		} catch (std::exception &ex) {
+			LOG(("Failed to save local message: %1").arg(ex.what()));
+		}
+	});
 }
 
 std::vector<LocalMessage> getLocalMessages(ID userId, ID dialogId, ID topicId, ID minId, ID maxId, int totalLimit) {
@@ -530,38 +652,42 @@ std::vector<LocalMessage> searchLocalMessages(ID userId, const std::string &sear
 }
 
 void clearLocalMessages(int olderThanSecs) {
-	const auto lock = std::lock_guard(storageMutex);
-	try {
-		if (olderThanSecs > 0) {
-			const auto cutoff = base::unixtime::now() - olderThanSecs;
-			storage.remove_all<LocalMessage>(
-				where(column<LocalMessage>(&LocalMessage::date) < cutoff)
-			);
-		} else {
-			storage.remove_all<LocalMessage>();
+	postWriteAsync([olderThanSecs] {
+		const auto lock = std::lock_guard(storageMutex);
+		try {
+			if (olderThanSecs > 0) {
+				const auto cutoff = base::unixtime::now() - olderThanSecs;
+				storage.remove_all<LocalMessage>(
+					where(column<LocalMessage>(&LocalMessage::date) < cutoff)
+				);
+			} else {
+				storage.remove_all<LocalMessage>();
+			}
+		} catch (std::exception &ex) {
+			LOG(("Failed to clear local messages: %1").arg(ex.what()));
 		}
-	} catch (std::exception &ex) {
-		LOG(("Failed to clear local messages: %1").arg(ex.what()));
-	}
+	});
 }
 
 void saveCachedDialogs(ID userId, int folderId, const std::vector<char> &serialized) {
-	const auto lock = std::lock_guard(storageMutex);
-	try {
-		storage.remove_all<CachedDialogs>(
-			where(
-				column<CachedDialogs>(&CachedDialogs::userId) == userId and
-				column<CachedDialogs>(&CachedDialogs::folderId) == folderId
-			)
-		);
-		CachedDialogs row;
-		row.userId = userId;
-		row.folderId = folderId;
-		row.serialized = serialized;
-		storage.insert(row);
-	} catch (const std::exception &ex) {
-		LOG(("Failed to save cached dialogs: %1").arg(ex.what()));
-	}
+	postWriteAsync([userId, folderId, serialized] {
+		const auto lock = std::lock_guard(storageMutex);
+		try {
+			storage.remove_all<CachedDialogs>(
+				where(
+					column<CachedDialogs>(&CachedDialogs::userId) == userId and
+					column<CachedDialogs>(&CachedDialogs::folderId) == folderId
+				)
+			);
+			CachedDialogs row;
+			row.userId = userId;
+			row.folderId = folderId;
+			row.serialized = serialized;
+			storage.insert(row);
+		} catch (const std::exception &ex) {
+			LOG(("Failed to save cached dialogs: %1").arg(ex.what()));
+		}
+	});
 }
 
 std::vector<char> getCachedDialogs(ID userId, int folderId) {
@@ -665,104 +791,120 @@ std::vector<RegexFilter> getByDialogId(ID dialogId) {
 }
 
 void addRegexFilter(const RegexFilter &filter) {
-	const auto lock = std::lock_guard(storageMutex);
-	try {
-		storage.begin_transaction();
-		storage.replace(filter); // we're using replace as we set std::vector<char> as primary key
-		storage.commit();
-	} catch (std::exception &ex) {
+	postWriteSync([filter] {
+		const auto lock = std::lock_guard(storageMutex);
 		try {
-			storage.rollback();
-		} catch (...) {
+			storage.begin_transaction();
+			storage.replace(filter); // we're using replace as we set std::vector<char> as primary key
+			storage.commit();
+		} catch (std::exception &ex) {
+			try {
+				storage.rollback();
+			} catch (...) {
+			}
+			LOG(("Failed to save regex filter for some reason: %1").arg(ex.what()));
 		}
-		LOG(("Failed to save regex filter for some reason: %1").arg(ex.what()));
-	}
+	});
 }
 
 void addRegexExclusion(const RegexFilterGlobalExclusion &exclusion) {
-	const auto lock = std::lock_guard(storageMutex);
-	try {
-		storage.begin_transaction();
-		storage.insert(exclusion);
-		storage.commit();
-	} catch (std::exception &ex) {
+	postWriteSync([exclusion] {
+		const auto lock = std::lock_guard(storageMutex);
 		try {
-			storage.rollback();
-		} catch (...) {
+			storage.begin_transaction();
+			storage.insert(exclusion);
+			storage.commit();
+		} catch (std::exception &ex) {
+			try {
+				storage.rollback();
+			} catch (...) {
+			}
+			LOG(("Failed to save regex filter exclusion for some reason: %1").arg(ex.what()));
 		}
-		LOG(("Failed to save regex filter exclusion for some reason: %1").arg(ex.what()));
-	}
+	});
 }
 
 void updateRegexFilter(const RegexFilter &filter) {
-	const auto lock = std::lock_guard(storageMutex);
-	try {
-		storage.update_all(
-			set(
-				c(&RegexFilter::text) = filter.text,
-				c(&RegexFilter::enabled) = filter.enabled,
-				c(&RegexFilter::reversed) = filter.reversed,
-				c(&RegexFilter::caseInsensitive) = filter.caseInsensitive,
-				c(&RegexFilter::dialogId) = filter.dialogId
-			),
-			where(c(&RegexFilter::id) == filter.id)
-		);
-	} catch (std::exception &ex) {
-		LOG(("Failed to update regex filter for some reason: %1").arg(ex.what()));
-	}
+	postWriteSync([filter] {
+		const auto lock = std::lock_guard(storageMutex);
+		try {
+			storage.update_all(
+				set(
+					c(&RegexFilter::text) = filter.text,
+					c(&RegexFilter::enabled) = filter.enabled,
+					c(&RegexFilter::reversed) = filter.reversed,
+					c(&RegexFilter::caseInsensitive) = filter.caseInsensitive,
+					c(&RegexFilter::dialogId) = filter.dialogId
+				),
+				where(c(&RegexFilter::id) == filter.id)
+			);
+		} catch (std::exception &ex) {
+			LOG(("Failed to update regex filter for some reason: %1").arg(ex.what()));
+		}
+	});
 }
 
 void deleteFilter(const std::vector<char> &id) {
-	const auto lock = std::lock_guard(storageMutex);
-	try {
-		storage.remove_all<RegexFilter>(
-			where(column<RegexFilter>(&RegexFilter::id) == id)
-		);
-	} catch (std::exception &ex) {
-		LOG(("Failed to delete regex filter for some reason: %1").arg(ex.what()));
-	}
+	postWriteSync([id] {
+		const auto lock = std::lock_guard(storageMutex);
+		try {
+			storage.remove_all<RegexFilter>(
+				where(column<RegexFilter>(&RegexFilter::id) == id)
+			);
+		} catch (std::exception &ex) {
+			LOG(("Failed to delete regex filter for some reason: %1").arg(ex.what()));
+		}
+	});
 }
 
 void deleteExclusionsByFilterId(const std::vector<char> &id) {
-	const auto lock = std::lock_guard(storageMutex);
-	try {
-		storage.remove_all<RegexFilterGlobalExclusion>(
-			where(column<RegexFilterGlobalExclusion>(&RegexFilterGlobalExclusion::filterId) == id)
-		);
-	} catch (std::exception &ex) {
-		LOG(("Failed to delete regex filter exclusion by filter id for some reason: %1").arg(ex.what()));
-	}
+	postWriteSync([id] {
+		const auto lock = std::lock_guard(storageMutex);
+		try {
+			storage.remove_all<RegexFilterGlobalExclusion>(
+				where(column<RegexFilterGlobalExclusion>(&RegexFilterGlobalExclusion::filterId) == id)
+			);
+		} catch (std::exception &ex) {
+			LOG(("Failed to delete regex filter exclusion by filter id for some reason: %1").arg(ex.what()));
+		}
+	});
 }
 
 void deleteExclusion(ID dialogId, std::vector<char> filterId) {
-	const auto lock = std::lock_guard(storageMutex);
-	try {
-		storage.remove_all<RegexFilterGlobalExclusion>(
-			where(column<RegexFilterGlobalExclusion>(&RegexFilterGlobalExclusion::filterId) == filterId and
-				column<RegexFilterGlobalExclusion>(&RegexFilterGlobalExclusion::dialogId) == dialogId
-			)
-		);
-	} catch (std::exception &ex) {
-		LOG(("Failed to delete regex filter exclusion for some reason: %1").arg(ex.what()));
-	}
+	postWriteSync([dialogId, filterId = std::move(filterId)] {
+		const auto lock = std::lock_guard(storageMutex);
+		try {
+			storage.remove_all<RegexFilterGlobalExclusion>(
+				where(column<RegexFilterGlobalExclusion>(&RegexFilterGlobalExclusion::filterId) == filterId and
+					column<RegexFilterGlobalExclusion>(&RegexFilterGlobalExclusion::dialogId) == dialogId
+				)
+			);
+		} catch (std::exception &ex) {
+			LOG(("Failed to delete regex filter exclusion for some reason: %1").arg(ex.what()));
+		}
+	});
 }
 
 void deleteAllFilters() {
-	const auto lock = std::lock_guard(storageMutex);
-	try {
-		storage.remove_all<RegexFilter>();
-	} catch (std::exception &ex) {
-		LOG(("Failed to delete all regex filter for some reason: %1").arg(ex.what()));
-	}
+	postWriteSync([] {
+		const auto lock = std::lock_guard(storageMutex);
+		try {
+			storage.remove_all<RegexFilter>();
+		} catch (std::exception &ex) {
+			LOG(("Failed to delete all regex filter for some reason: %1").arg(ex.what()));
+		}
+	});
 }
 
 void deleteAllExclusions() {
-	const auto lock = std::lock_guard(storageMutex);
-	try {
-		storage.remove_all<RegexFilterGlobalExclusion>();
-	} catch (std::exception &ex) {
-		LOG(("Failed to delete all regex filter exclusions for some reason: %1").arg(ex.what()));
-	}
+	postWriteSync([] {
+		const auto lock = std::lock_guard(storageMutex);
+		try {
+			storage.remove_all<RegexFilterGlobalExclusion>();
+		} catch (std::exception &ex) {
+			LOG(("Failed to delete all regex filter exclusions for some reason: %1").arg(ex.what()));
+		}
+	});
 }
 
 bool hasFilters() {

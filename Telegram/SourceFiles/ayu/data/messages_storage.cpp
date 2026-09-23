@@ -153,9 +153,7 @@ void addLocalMessage(not_null<HistoryItem *> item) {
 	LocalMessage message;
 	map(item, message);
 
-	crl::async([message = std::move(message)] {
-		AyuDatabase::addLocalMessage(message);
-	});
+	AyuDatabase::addLocalMessage(message);
 }
 
 std::vector<AyuMessageBase> getLocalMessages(not_null<PeerData*> peer, ID topicId, ID minId, ID maxId, int totalLimit) {
@@ -173,9 +171,7 @@ std::vector<AyuMessageBase> searchLocalMessages(not_null<Main::Session*> session
 }
 
 void clearLocalMessages(int olderThanSecs) {
-	crl::async([=] {
-		AyuDatabase::clearLocalMessages(olderThanSecs);
-	});
+	AyuDatabase::clearLocalMessages(olderThanSecs);
 }
 
 MTPmessages_Messages getLocalMTPMessages(not_null<PeerData*> peer, ID topicId, ID minId, ID maxId, int totalLimit) {
@@ -194,9 +190,7 @@ MTPmessages_Messages getLocalMTPMessages(not_null<PeerData*> peer, ID topicId, I
 }
 
 void saveCachedDialogs(ID userId, int folderId, const std::vector<char> &serialized) {
-	crl::async([userId, folderId, serialized] {
-		AyuDatabase::saveCachedDialogs(userId, folderId, serialized);
-	});
+	AyuDatabase::saveCachedDialogs(userId, folderId, serialized);
 }
 
 std::vector<char> getCachedDialogs(ID userId, int folderId) {
