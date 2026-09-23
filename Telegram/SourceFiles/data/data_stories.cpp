@@ -2421,6 +2421,9 @@ void Stories::requestReadTills() {
 }
 
 bool Stories::isUnread(not_null<Story*> story) {
+	if (AyuSettings::getInstance().disableStories()) {
+		return false;
+	}
 	const auto till = _readTill.find(story->peer()->id);
 	if (till == end(_readTill) && !_readTillReceived) {
 		requestReadTills();
@@ -2432,6 +2435,9 @@ bool Stories::isUnread(not_null<Story*> story) {
 }
 
 void Stories::registerPolling(not_null<Story*> story, Polling polling) {
+	if (AyuSettings::getInstance().disableStories()) {
+		return;
+	}
 	auto &settings = _pollingSettings[story];
 	switch (polling) {
 	case Polling::Chat: ++settings.chat; break;
@@ -2448,19 +2454,23 @@ void Stories::registerPolling(not_null<Story*> story, Polling polling) {
 
 void Stories::unregisterPolling(not_null<Story*> story, Polling polling) {
 	const auto i = _pollingSettings.find(story);
-	Assert(i != end(_pollingSettings));
+	if (i == end(_pollingSettings)) {
+		return;
+	}
 
 	switch (polling) {
 	case Polling::Chat:
-		Assert(i->second.chat > 0);
-		--i->second.chat;
+		if (i->second.chat > 0) {
+			--i->second.chat;
+		}
 		break;
 	case Polling::Viewer:
-		Assert(i->second.viewer > 0);
-		if (!--i->second.viewer) {
-			_pollingViews.remove(story);
-			if (_pollingViews.empty()) {
-				_pollingViewsTimer.cancel();
+		if (i->second.viewer > 0) {
+			if (!--i->second.viewer) {
+				_pollingViews.remove(story);
+				if (_pollingViews.empty()) {
+					_pollingViewsTimer.cancel();
+				}
 			}
 		}
 		break;
@@ -2471,6 +2481,9 @@ void Stories::unregisterPolling(not_null<Story*> story, Polling polling) {
 }
 
 bool Stories::registerPolling(FullStoryId id, Polling polling) {
+	if (AyuSettings::getInstance().disableStories()) {
+		return false;
+	}
 	if (const auto maybeStory = lookup(id)) {
 		registerPolling(*maybeStory, polling);
 		return true;
@@ -2484,8 +2497,6 @@ void Stories::unregisterPolling(FullStoryId id, Polling polling) {
 	} else if (const auto i = _deletingStories.find(id)
 		; i != end(_deletingStories)) {
 		unregisterPolling(i->second.get(), polling);
-	} else {
-		Unexpected("Couldn't find story for unregistering polling.");
 	}
 }
 

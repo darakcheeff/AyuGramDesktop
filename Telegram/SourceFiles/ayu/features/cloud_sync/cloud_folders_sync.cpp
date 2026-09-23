@@ -187,6 +187,9 @@ private:
 			if (!filter.id()) {
 				continue;
 			}
+			if (!Data::IsLocalFilterId(filter.id())) {
+				continue;
+			}
 			using Flag = Data::ChatFilter::Flag;
 			nlohmann::json fj;
 			fj["id"] = filter.id();
@@ -375,9 +378,14 @@ private:
 		const auto j = serializeLocalFolders();
 		const auto jsonStr = QString::fromStdString(j.dump());
 		const auto text = QString::fromUtf8(kSyncTag) + u"\n"_q + jsonStr;
+		if (text.size() > 4000) {
+			qWarning() << "[AyuCloudSync] Payload exceeds 4000 characters (" << text.size() << "), skipping upload to avoid MESSAGE_TOO_LONG";
+			return;
+		}
 
 		auto action = Api::SendAction(_session->data().history(ch));
 		action.options.silent = true;
+		action.generateLocal = false;
 		auto message = Api::MessageToSend(action);
 		message.textWithTags = { text };
 		_session->api().sendMessage(std::move(message));

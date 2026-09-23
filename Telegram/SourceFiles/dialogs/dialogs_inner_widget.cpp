@@ -1814,8 +1814,10 @@ Ui::VideoUserpic *InnerWidget::validateVideoUserpic(
 		return i->second.get();
 	}
 	const auto repaint = [=] {
-		updateDialogRow({ history, FullMsgId() });
-		updateSearchResult(history->peer);
+		Ui::PostponeCall(crl::guard(this, [=] {
+			updateDialogRow({ history, FullMsgId() });
+			updateSearchResult(history->peer);
+		}));
 	};
 	return _videoUserpics.emplace(peer, std::make_unique<Ui::VideoUserpic>(
 		peer,
@@ -6258,7 +6260,11 @@ void InnerWidget::updateRowCornerStatusShown(not_null<History*> history) {
 			&& (top + _st->height > _visibleTop);
 		row->updateCornerBadgeShown(
 			history->peer,
-			visible ? Fn<void()>([=] { repaintDialogRowCornerStatus(history); }) : nullptr);
+			visible ? Fn<void()>([=] {
+				Ui::PostponeCall(crl::guard(this, [=] {
+					repaintDialogRowCornerStatus(history);
+				}));
+			}) : nullptr);
 	}
 }
 
