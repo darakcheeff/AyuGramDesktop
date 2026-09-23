@@ -6237,10 +6237,7 @@ void InnerWidget::repaintDialogRowCornerStatus(not_null<History*> history) {
 }
 
 void InnerWidget::updateRowCornerStatusShown(not_null<History*> history) {
-	const auto repaint = [=] {
-		repaintDialogRowCornerStatus(history);
-	};
-	repaint();
+	repaintDialogRowCornerStatus(history);
 
 	const auto findRow = [&](not_null<History*> history)
 		-> std::pair<Row*, int> {
@@ -6261,7 +6258,7 @@ void InnerWidget::updateRowCornerStatusShown(not_null<History*> history) {
 			&& (top + _st->height > _visibleTop);
 		row->updateCornerBadgeShown(
 			history->peer,
-			visible ? Fn<void()>(crl::guard(this, repaint)) : nullptr);
+			visible ? Fn<void()>([=] { repaintDialogRowCornerStatus(history); }) : nullptr);
 	}
 }
 
