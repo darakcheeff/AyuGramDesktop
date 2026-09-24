@@ -2330,9 +2330,6 @@ bool Stories::isQuitPrevent() {
 }
 
 void Stories::incrementPreloadingMainSources() {
-	if (AyuSettings::getInstance().disableStories()) {
-		return;
-	}
 	Expects(_preloadingMainSourcesCounter >= 0);
 
 	if (++_preloadingMainSourcesCounter == 1
@@ -2342,7 +2339,9 @@ void Stories::incrementPreloadingMainSources() {
 }
 
 void Stories::decrementPreloadingMainSources() {
-	Expects(_preloadingMainSourcesCounter > 0);
+	if (_preloadingMainSourcesCounter <= 0) {
+		return;
+	}
 
 	if (!--_preloadingMainSourcesCounter
 		&& rebuildPreloadSources(StorySourcesList::NotHidden)) {
@@ -2360,7 +2359,9 @@ void Stories::incrementPreloadingHiddenSources() {
 }
 
 void Stories::decrementPreloadingHiddenSources() {
-	Expects(_preloadingHiddenSourcesCounter > 0);
+	if (_preloadingHiddenSourcesCounter <= 0) {
+		return;
+	}
 
 	if (!--_preloadingHiddenSourcesCounter
 		&& rebuildPreloadSources(StorySourcesList::Hidden)) {
