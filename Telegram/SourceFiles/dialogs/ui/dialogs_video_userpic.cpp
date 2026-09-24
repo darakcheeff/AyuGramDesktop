@@ -112,7 +112,6 @@ bool VideoUserpic::startReady(int size) {
 		_lastSize = size ? size : _video->width();
 	}
 	_video->start(request(_lastSize));
-	_repaint();
 	return true;
 }
 

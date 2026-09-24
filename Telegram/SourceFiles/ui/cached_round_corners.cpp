@@ -239,8 +239,9 @@ CornersPixmaps PrepareCornerPixmaps(ImageRoundRadius radius, style::color bg, co
 		return PrepareCornerPixmaps(st::roundRadiusSmall, bg, sh);
 	case ImageRoundRadius::Large:
 		return PrepareCornerPixmaps(st::roundRadiusLarge, bg, sh);
+	default:
+		return PrepareCornerPixmaps(st::roundRadiusSmall, bg, sh);
 	}
-	Unexpected("Image round radius in PrepareCornerPixmaps.");
 }
 
 CornersPixmaps PrepareInvertedCornerPixmaps(int radius, style::color bg) {
@@ -269,8 +270,8 @@ CornersPixmaps PrepareInvertedCornerPixmaps(int radius, style::color bg) {
 	case Radius::ThumbLarge: return MsgFileThumbRadiusLarge();
 	case Radius::BubbleSmall: return BubbleRadiusSmall();
 	case Radius::BubbleLarge: return BubbleRadiusLarge();
+	default: return st::roundRadiusSmall;
 	}
-	Unexpected("Radius tag in CachedCornerRadiusValue.");
 }
 
 [[nodiscard]] const std::array<QImage, 4> &CachedCornersMasks(

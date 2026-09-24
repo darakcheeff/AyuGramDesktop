@@ -622,8 +622,6 @@ void SubsectionTabs::loadMore() {
 		forum->requestTopics();
 	} else if (const auto monoforum = _history->peer->monoforum()) {
 		monoforum->loadMore();
-	} else {
-		Unexpected("Peer in SubsectionTabs::loadMore.");
 	}
 }
 
@@ -632,9 +630,8 @@ rpl::producer<> SubsectionTabs::dataChanged() const {
 		return forum->chatsListChanges();
 	} else if (const auto monoforum = _history->peer->monoforum()) {
 		return monoforum->chatsListChanges();
-	} else {
-		Unexpected("Peer in SubsectionTabs::dataChanged.");
 	}
+	return rpl::never<>();
 }
 
 void SubsectionTabs::toggleModes() {
@@ -671,19 +668,24 @@ rpl::producer<> SubsectionTabs::removeRequests() const {
 		return forum->destroyed();
 	} else if (const auto monoforum = _history->peer->monoforum()) {
 		return monoforum->destroyed();
-	} else {
-		Unexpected("Peer in SubsectionTabs::removeRequests.");
 	}
+	return rpl::never<>();
 }
 
 void SubsectionTabs::extractToParent(not_null<Ui::RpWidget*> parent) {
-	Expects((_horizontal || _vertical || _bottom) && _shadow);
+	if (!((_horizontal || _vertical || _bottom) && _shadow)) {
+		return;
+	}
 
 	const auto widget = activeWidget();
-	widget->hide();
-	widget->setParent(parent);
-	_shadow->hide();
-	_shadow->setParent(parent);
+	if (widget) {
+		widget->hide();
+		widget->setParent(parent);
+	}
+	if (_shadow) {
+		_shadow->hide();
+		_shadow->setParent(parent);
+	}
 }
 
 void SubsectionTabs::setBoundingRect(QRect boundingRect) {
@@ -820,8 +822,6 @@ void SubsectionTabs::track() {
 		}) | rpl::on_next([=] {
 			scheduleRefresh();
 		}, _lifetime);
-	} else {
-		Unexpected("Peer in SubsectionTabs::track.");
 	}
 }
 

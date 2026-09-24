@@ -898,14 +898,6 @@ void TopBarWidget::backClicked() {
 		&& _activeChat.key.history()->peer->asChannel()
 		&& _activeChat.key.history()->peer->asChannel()->isCommunity()) {
 		_controller->closeCommunity();
-	} else if (const auto topic = _activeChat.key.topic()) {
-		if (!_controller->content()->stackIsEmpty()) {
-			_controller->showBackFromStack();
-		} else if (const auto forum = topic->forum()) {
-			_controller->showForum(forum, Window::SectionShow::Way::Backward);
-		} else {
-			_controller->showBackFromStack();
-		}
 	} else {
 		_controller->showBackFromStack();
 	}
