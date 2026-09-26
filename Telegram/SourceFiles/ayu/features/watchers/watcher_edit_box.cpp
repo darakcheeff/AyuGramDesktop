@@ -196,8 +196,16 @@ void ShowWatcherEditBox(
 			object_ptr<Ui::InputField>(
 				webhookInner,
 				st::defaultInputField,
-				rpl::single(QString::fromUtf8("URL Webhook (напр. https://n8n.../webhook/tg)")),
+				rpl::single(QString::fromUtf8("URL Webhook (напр. https://n8n.ansy.us/webhook/ayugram-ai-test)")),
 				rule.webhookUrl));
+
+		const auto webhookAutoReply = webhookInner->add(
+			object_ptr<Ui::Checkbox>(
+				webhookInner,
+				QString::fromUtf8("🤖 AI-автоответчик (отправлять ответ n8n в чат)"),
+				rule.webhookAutoReply,
+				st::defaultBoxCheckbox),
+			st::settingsCheckboxPadding);
 
 		const auto testBtn = webhookInner->add(
 			object_ptr<Ui::SettingsButton>(
@@ -284,6 +292,7 @@ void ShowWatcherEditBox(
 			result.matchCount = count;
 			result.sendWebhook = sendWebhook->checked();
 			result.webhookUrl = webhookUrlField->getTextWithTags().text.trimmed();
+			result.webhookAutoReply = webhookAutoReply->checked();
 
 			if (rId.isEmpty()) {
 				Manager::Instance().addRule(result);

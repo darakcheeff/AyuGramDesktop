@@ -46,6 +46,7 @@ void DispatchWebhook(const WatcherRule &rule, not_null<HistoryItem*> item, const
 	const auto peer = history->peer;
 	const auto from = item->from();
 	const auto text = item->originalText().text;
+	const auto topicRootId = item->topicRootId();
 
 	QString link;
 	if (peer->isChannel()) {
@@ -68,7 +69,12 @@ void DispatchWebhook(const WatcherRule &rule, not_null<HistoryItem*> item, const
 		{"id", peer->id.value},
 		{"title", peer->name().toStdString()},
 		{"username", peer->username().toStdString()},
-		{"type", peer->isChannel() ? (peer->isMegagroup() ? "supergroup" : "channel") : (peer->isChat() ? "chat" : "user")}
+		{"type", peer->isChannel() ? (peer->isMegagroup() ? "supergroup" : "channel") : (peer->isChat() ? "chat" : "user")},
+		{"is_forum", peer->isForum()}
+	};
+	root["topic"] = {
+		{"id", topicRootId.bare},
+		{"is_topic", (topicRootId != 0)}
 	};
 	root["sender"] = {
 		{"id", from ? from->id.value : 0},
@@ -79,7 +85,8 @@ void DispatchWebhook(const WatcherRule &rule, not_null<HistoryItem*> item, const
 		{"id", item->id.bare},
 		{"text", text.toStdString()},
 		{"date", item->date()},
-		{"link", link.toStdString()}
+		{"link", link.toStdString()},
+		{"reply_to_id", item->replyToId().bare}
 	};
 
 	auto *nam = new QNetworkAccessManager();
@@ -89,14 +96,56 @@ void DispatchWebhook(const WatcherRule &rule, not_null<HistoryItem*> item, const
 	QByteArray body = QByteArray::fromStdString(root.dump());
 	auto *reply = nam->post(req, body);
 
+	const auto timeoutMs = rule.webhookAutoReply ? 30000 : 8000;
 	auto *timer = new QTimer(reply);
 	timer->setSingleShot(true);
 	QObject::connect(timer, &QTimer::timeout, reply, [=] {
 		reply->abort();
 	});
-	timer->start(8000);
+	timer->start(timeoutMs);
+
+	const auto peerId = peer->id;
+	const auto itemId = item->id;
+	const auto session = &history->session();
+	const auto autoReply = rule.webhookAutoReply;
 
 	QObject::connect(reply, &QNetworkReply::finished, [=] {
+		if (autoReply && reply->error() == QNetworkReply::NoError) {
+			const auto respBytes = reply->readAll();
+			if (!respBytes.isEmpty()) {
+				try {
+					const auto j = nlohmann::json::parse(respBytes.toStdString());
+					std::string replyText;
+					if (j.contains("reply") && j["reply"].is_string()) {
+						replyText = j["reply"].get<std::string>();
+					} else if (j.contains("text") && j["text"].is_string()) {
+						replyText = j["text"].get<std::string>();
+					} else if (j.contains("output") && j["output"].is_string()) {
+						replyText = j["output"].get<std::string>();
+					}
+					if (!replyText.empty()) {
+						const auto qText = QString::fromStdString(replyText).trimmed();
+						if (!qText.isEmpty()) {
+							bool silent = false;
+							if (j.contains("silent") && j["silent"].is_boolean()) {
+								silent = j["silent"].get<bool>();
+							}
+							crl::on_main(session, [=] {
+								const auto hist = session->data().history(peerId);
+								auto action = Api::SendAction(hist);
+								action.replyTo.messageId = itemId;
+								action.replyTo.topicRootId = topicRootId;
+								action.options.silent = silent;
+								auto msg = Api::MessageToSend(action);
+								msg.textWithTags = { qText };
+								hist->session().api().sendMessage(std::move(msg));
+							});
+						}
+					}
+				} catch (...) {
+				}
+			}
+		}
 		reply->deleteLater();
 		nam->deleteLater();
 	});
@@ -292,7 +341,18 @@ void Manager::sendTestWebhook(
 		const auto errorString = reply->errorString();
 		if (callback) {
 			if (success) {
-				callback(true, QString("HTTP %1 OK").arg(status ? status : 200));
+				const auto respBytes = reply->readAll();
+				QString replySnippet;
+				if (!respBytes.isEmpty()) {
+					try {
+						const auto j = nlohmann::json::parse(respBytes.toStdString());
+						if (j.contains("reply") && j["reply"].is_string()) {
+							replySnippet = QString::fromUtf8(" (Ответ: \"") + QString::fromStdString(j["reply"].get<std::string>()).left(80) + QString::fromUtf8("\")");
+						}
+					} catch (...) {
+					}
+				}
+				callback(true, QString("HTTP %1 OK%2").arg(status ? status : 200).arg(replySnippet));
 			} else {
 				callback(false, errorString.isEmpty() ? QString("HTTP %1").arg(status) : errorString);
 			}
@@ -350,7 +410,7 @@ bool ProcessIncomingMessage(not_null<HistoryItem*> item) {
 			}
 			matchedText = match.captured(0);
 		} else {
-			if (r.senderUserId == 0) {
+			if (r.senderUserId == 0 && r.peerId == 0) {
 				continue;
 			}
 			matchedText = text.left(100);

@@ -33,6 +33,7 @@ struct WatcherRule {
 	uint64 matchCount = 0;
 	bool sendWebhook = false;
 	QString webhookUrl;
+	bool webhookAutoReply = false;
 };
 
 inline void to_json(nlohmann::json &j, const WatcherRule &r) {
@@ -54,6 +55,7 @@ inline void to_json(nlohmann::json &j, const WatcherRule &r) {
 		{"matchCount", r.matchCount},
 		{"sendWebhook", r.sendWebhook},
 		{"webhookUrl", r.webhookUrl.toStdString()},
+		{"webhookAutoReply", r.webhookAutoReply},
 	};
 }
 
@@ -75,6 +77,7 @@ inline void from_json(const nlohmann::json &j, WatcherRule &r) {
 	r.matchCount = j.value("matchCount", uint64(0));
 	r.sendWebhook = j.value("sendWebhook", false);
 	r.webhookUrl = QString::fromStdString(j.value("webhookUrl", ""));
+	r.webhookAutoReply = j.value("webhookAutoReply", false);
 }
 
 } // namespace AyuWatchers

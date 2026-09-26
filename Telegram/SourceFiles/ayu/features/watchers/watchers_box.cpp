@@ -81,7 +81,11 @@ void ShowWatchersBox(
 				}
 				if (rule.notifyBypassMute) tags << QString::fromUtf8("🔔 Звук");
 				if (rule.forwardToChat) tags << QString::fromUtf8("💬 В Избранное");
-				if (rule.sendWebhook) tags << QString::fromUtf8("🌐 Webhook");
+				if (rule.sendWebhook) {
+					tags << (rule.webhookAutoReply
+						? QString::fromUtf8("🤖 AI-ответ")
+						: QString::fromUtf8("🌐 Webhook"));
+				}
 				if (rule.trackCounter) tags << QString::fromUtf8("🔢 Срабатываний: %1").arg(rule.matchCount);
 
 				if (rule.peerId == 0) {
