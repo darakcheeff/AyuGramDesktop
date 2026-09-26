@@ -105,7 +105,7 @@ void DispatchWebhook(const WatcherRule &rule, not_null<HistoryItem*> item, const
 	timer->start(timeoutMs);
 
 	const auto peerId = peer->id;
-	const auto itemId = item->id;
+	const auto itemFullId = item->fullId();
 	const auto session = &history->session();
 	const auto autoReply = rule.webhookAutoReply;
 
@@ -133,7 +133,7 @@ void DispatchWebhook(const WatcherRule &rule, not_null<HistoryItem*> item, const
 							crl::on_main(session, [=] {
 								const auto hist = session->data().history(peerId);
 								auto action = Api::SendAction(hist);
-								action.replyTo.messageId = itemId;
+								action.replyTo.messageId = itemFullId;
 								action.replyTo.topicRootId = topicRootId;
 								action.options.silent = silent;
 								auto msg = Api::MessageToSend(action);
