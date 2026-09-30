@@ -109,7 +109,7 @@ PhoneWidget::PhoneWidget(
 		this,
 		u"Регистрация без смартфона (No-GMS)"_q,
 		false,
-		st::defaultBoxCheckbox);
+		st::defaultCheckbox);
 	_mobileNoGms->checkedChanges(
 	) | rpl::on_next([=](bool checked) {
 		api().instance().setMobileNoGmsEmulation(checked);
