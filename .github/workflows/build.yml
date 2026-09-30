@@ -111,7 +111,7 @@ jobs:
             -DDESKTOP_APP_DISABLE_CRASH_REPORTS=ON
 
       - name: Save Workspace Cache
-        if: success()
+        if: always()
         uses: actions/cache/save@v4
         with:
           path: |
