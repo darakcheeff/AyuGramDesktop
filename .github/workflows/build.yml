@@ -136,9 +136,15 @@ jobs:
       - name: Extract Version Info
         id: version
         run: |
-          VERSION=$(grep -oP 'AppVersionStr = "\K[^"]+' Telegram/SourceFiles/core/version.h || echo "7.0.9-custom-b3")
-          echo "tag=v${VERSION}" >> $GITHUB_OUTPUT
-          echo "title=AyuGram Desktop v${VERSION} (Custom Linux Edition)" >> $GITHUB_OUTPUT
+          VERSION=$(grep -oP 'AppVersionStr = "\K[^"]+' Telegram/SourceFiles/core/version.h || echo "7.0.9")
+          BUILD_INFO=$(grep -oP 'AppBuildInfoStr = "\K[^"]+' Telegram/SourceFiles/core/version.h || echo "")
+          if [ -n "$BUILD_INFO" ]; then
+            FULL_VERSION="${VERSION}-${BUILD_INFO}"
+          else
+            FULL_VERSION="${VERSION}"
+          fi
+          echo "tag=v${FULL_VERSION}" >> $GITHUB_OUTPUT
+          echo "title=AyuGram Desktop v${FULL_VERSION} (Custom Linux Edition)" >> $GITHUB_OUTPUT
 
       - name: Create / Update GitHub Release
         uses: softprops/action-gh-release@v2
