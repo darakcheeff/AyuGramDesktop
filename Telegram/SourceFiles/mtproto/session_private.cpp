@@ -563,6 +563,23 @@ MTPVector<MTPJSONObjectValue> SessionPrivate::prepareInitParams() {
 	const auto rounded = base::SafeRound(std::abs(sliced) / 900.)
 		* 900
 		* sign;
+	if (_instance->mobileNoGmsEmulation()) {
+		auto values = QVector<MTPJSONObjectValue>{
+			MTP_jsonObjectValue(
+				MTP_string("tz_offset"),
+				MTP_jsonNumber(MTP_double(rounded))),
+			MTP_jsonObjectValue(
+				MTP_string("device_token"),
+				MTP_jsonString(MTP_string("__NO_GOOGLE_PLAY_SERVICES__"))),
+			MTP_jsonObjectValue(
+				MTP_string("installer"),
+				MTP_jsonString(MTP_string("org.telegram.messenger.web"))),
+			MTP_jsonObjectValue(
+				MTP_string("package_id"),
+				MTP_jsonString(MTP_string("org.telegram.messenger.web"))),
+		};
+		return MTP_vector<MTPJSONObjectValue>(std::move(values));
+	}
 	return MTP_vector<MTPJSONObjectValue>(
 		1,
 		MTP_jsonObjectValue(
@@ -673,16 +690,22 @@ void SessionPrivate::tryToSend() {
 	int32 initSize = 0, initSizeInInts = 0;
 	if (needsLayer) {
 		Assert(_options != nullptr);
+		const auto mobileNoGms = _instance->mobileNoGmsEmulation();
 		const auto systemLangCode = _options->systemLangCode;
 		const auto cloudLangCode = _options->cloudLangCode;
-		const auto langPackName = _options->langPackName;
+		const auto langPackName = mobileNoGms
+			? QString()
+			: _options->langPackName;
 		const auto deviceModel = (_currentDcType == DcType::Cdn)
 			? "n/a"
 			: _instance->deviceModel();
 		const auto systemVersion = (_currentDcType == DcType::Cdn)
 			? "n/a"
 			: _instance->systemVersion();
-		const auto appVersion = ComputeAppVersion();
+		const auto appVersion = mobileNoGms
+			? u"11.5.3 (54892) direct"_q
+			: ComputeAppVersion();
+		const auto effectiveApiId = mobileNoGms ? 6 : ApiId;
 		const auto proxyType = _options->proxy.type;
 		const auto mtprotoProxy = (proxyType == ProxyData::Type::Mtproto);
 		const auto clientProxyFields = mtprotoProxy
@@ -694,7 +717,7 @@ void SessionPrivate::tryToSend() {
 		initWrapper = MTPInitConnection<SerializedRequest>(
 			MTP_flags(Flag::f_params
 				| (mtprotoProxy ? Flag::f_proxy : Flag(0))),
-			MTP_int(ApiId),
+			MTP_int(effectiveApiId),
 			MTP_string(deviceModel),
 			MTP_string(systemVersion),
 			MTP_string(appVersion),

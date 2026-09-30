@@ -16,6 +16,7 @@ class PhonePartInput;
 class CountryCodeInput;
 class RoundButton;
 class FlatLabel;
+class Checkbox;
 } // namespace Ui
 
 namespace Intro {
@@ -65,6 +66,7 @@ private:
 	object_ptr<CountryInput> _country;
 	object_ptr<Ui::CountryCodeInput> _code;
 	object_ptr<Ui::PhonePartInput> _phone;
+	object_ptr<Ui::Checkbox> _mobileNoGms = { nullptr };
 
 	QString _sentPhone;
 	mtpRequestId _sentRequest = 0;

@@ -182,6 +182,13 @@ void CodeWidget::activate() {
 		_callLabel->show();
 	}
 	setInnerFocus();
+
+	if (getData()->autoResendOnFirebase) {
+		getData()->autoResendOnFirebase = false;
+		crl::on_main(this, [=] {
+			noTelegramCode();
+		});
+	}
 }
 
 void CodeWidget::finished() {

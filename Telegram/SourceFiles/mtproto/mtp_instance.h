@@ -81,6 +81,8 @@ public:
 	[[nodiscard]] bool isTestMode() const;
 	[[nodiscard]] QString deviceModel() const;
 	[[nodiscard]] QString systemVersion() const;
+	void setMobileNoGmsEmulation(bool enabled);
+	[[nodiscard]] bool mobileNoGmsEmulation() const;
 
 	// Main thread.
 	void dcPersistentKeyChanged(DcId dcId, const AuthKeyPtr &persistentKey);

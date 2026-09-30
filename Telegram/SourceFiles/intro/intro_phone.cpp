@@ -12,8 +12,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "intro/intro_email.h"
 #include "intro/intro_qr.h"
 #include "styles/style_intro.h"
+#include "styles/style_settings.h"
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/labels.h"
+#include "ui/widgets/checkbox.h"
 #include "ui/wrap/fade_wrap.h"
 #include "ui/widgets/fields/special_fields.h"
 #include "main/main_account.h"
@@ -102,6 +104,17 @@ PhoneWidget::PhoneWidget(
 		_country->chooseCountry(u"US"_q);
 	}
 	_changed = false;
+
+	_mobileNoGms.create(
+		this,
+		u"Регистрация без смартфона (No-GMS)"_q,
+		false,
+		st::defaultBoxCheckbox);
+	_mobileNoGms->checkedChanges(
+	) | rpl::on_next([=](bool checked) {
+		api().instance().setMobileNoGmsEmulation(checked);
+	}, lifetime());
+	_mobileNoGms->show();
 }
 
 QString PhoneWidget::accessibilityName() {
@@ -136,6 +149,9 @@ void PhoneWidget::resizeEvent(QResizeEvent *e) {
 	auto phoneTop = _country->y() + _country->height() + st::introPhoneTop;
 	_code->moveToLeft(contentLeft(), phoneTop);
 	_phone->moveToLeft(contentLeft() + _country->width() - st::introPhone.width, phoneTop);
+	if (_mobileNoGms) {
+		_mobileNoGms->moveToLeft(contentLeft(), phoneTop + _phone->height() + st::introPhoneTop * 2);
+	}
 }
 
 void PhoneWidget::showPhoneError(rpl::producer<QString> text) {
@@ -203,10 +219,15 @@ void PhoneWidget::submit() {
 
 	_sentPhone = phone;
 	api().instance().setUserPhone(_sentPhone);
+	const auto isMobile = api().instance().mobileNoGmsEmulation();
+	const auto sendApiId = isMobile ? 6 : ApiId;
+	const auto sendApiHash = isMobile
+		? u"eb06d4abfb49dc3eeb1aeb98ae0f581e"_q
+		: QString::fromLatin1(ApiHash);
 	_sentRequest = api().request(MTPauth_SendCode(
 		MTP_string(_sentPhone),
-		MTP_int(ApiId),
-		MTP_string(ApiHash),
+		MTP_int(sendApiId),
+		MTP_string(sendApiHash),
 		MTP_codeSettings(
 			MTP_flags(0),
 			MTPVector<MTPbytes>(),
@@ -281,6 +302,10 @@ void PhoneWidget::phoneSubmitFail(const MTP::Error &error) {
 		showPhoneError(tr::lng_bad_phone());
 	} else if (err == u"PHONE_NUMBER_BANNED"_q) {
 		Ui::ShowPhoneBannedError(getData()->controller, _sentPhone);
+	} else if (err == u"SMS_CODE_CREATE_FAILED"_q || err == u"SEND_CODE_UNAVAILABLE"_q) {
+		showPhoneError(rpl::single(
+			u"Telegram не смог отправить SMS на этот номер через этот шлюз. "
+			"Включите галочку «Регистрация без смартфона (No-GMS)» или используйте звонок."_q));
 	} else if (!MTP::IgnoreError(error)) {
 		showPhoneError(rpl::single(err));
 	}

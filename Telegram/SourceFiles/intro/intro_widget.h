@@ -63,6 +63,7 @@ struct Data {
 
 	int codeLength = 5;
 	bool codeByTelegram = false;
+	bool autoResendOnFirebase = false;
 	QString codeByFragmentUrl;
 
 	EmailStatus emailStatus = EmailStatus::None;

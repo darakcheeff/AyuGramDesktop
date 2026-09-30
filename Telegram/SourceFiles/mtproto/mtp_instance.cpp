@@ -86,6 +86,8 @@ public:
 	// Thread safe.
 	[[nodiscard]] QString deviceModel() const;
 	[[nodiscard]] QString systemVersion() const;
+	void setMobileNoGmsEmulation(bool enabled);
+	[[nodiscard]] bool mobileNoGmsEmulation() const;
 
 	// Main thread.
 	void requestConfig();
@@ -232,6 +234,7 @@ private:
 
 	mutable QMutex _deviceModelMutex;
 	QString _customDeviceModel;
+	std::atomic<bool> _mobileNoGmsEmulation = false;
 
 	rpl::variable<DcId> _mainDcId = Fields::kDefaultMainDc;
 	bool _mainDcIdForced = false;
@@ -902,6 +905,9 @@ bool Instance::Private::isTestMode() const {
 }
 
 QString Instance::Private::deviceModel() const {
+	if (_mobileNoGmsEmulation.load()) {
+		return u"HUAWEI ALN-AL00"_q;
+	}
 	QMutexLocker lock(&_deviceModelMutex);
 	return _customDeviceModel.isEmpty()
 		? _deviceModelDefault
@@ -909,7 +915,20 @@ QString Instance::Private::deviceModel() const {
 }
 
 QString Instance::Private::systemVersion() const {
+	if (_mobileNoGmsEmulation.load()) {
+		return u"SDK 31"_q;
+	}
 	return _systemVersion;
+}
+
+void Instance::Private::setMobileNoGmsEmulation(bool enabled) {
+	if (_mobileNoGmsEmulation.exchange(enabled) != enabled) {
+		reInitConnection(mainDcId());
+	}
+}
+
+bool Instance::Private::mobileNoGmsEmulation() const {
+	return _mobileNoGmsEmulation.load();
 }
 
 void Instance::Private::unpaused() {
@@ -2032,6 +2051,14 @@ QString Instance::deviceModel() const {
 
 QString Instance::systemVersion() const {
 	return _private->systemVersion();
+}
+
+void Instance::setMobileNoGmsEmulation(bool enabled) {
+	_private->setMobileNoGmsEmulation(enabled);
+}
+
+bool Instance::mobileNoGmsEmulation() const {
+	return _private->mobileNoGmsEmulation();
 }
 
 void Instance::setUpdatesHandler(Fn<void(const Response&)> handler) {
