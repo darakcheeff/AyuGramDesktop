@@ -144,8 +144,8 @@ void PerDialogFiltersListController::rowClicked(not_null<PeerListRow*> peer) {
 			{
 				if (AyuSettings::getInstance().isShadowBanned(did)) {
 					AyuSettings::getInstance().removeShadowBan(did);
-					delegate()->peerListRemoveRow(row);
-					delegate()->peerListRefresh();
+					delegate()->peerListRemoveRow(peer);
+					delegate()->peerListRefreshRows();
 				} else {
 					AyuSettings::getInstance().addShadowBan(did);
 				}
