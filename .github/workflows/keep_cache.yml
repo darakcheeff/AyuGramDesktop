@@ -1,0 +1,48 @@
+name: Keep-Alive Build Cache
+
+on:
+  schedule:
+    # Запуск каждые 5 дней в 03:00 UTC (гарантированно удерживает 7-дневный TTL кэша)
+    - cron: '0 3 */5 * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  keep-cache:
+    name: Refresh & Keep-Alive Cache
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout minimal repo
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            README.md
+
+      - name: Restore Workspace Cache
+        id: restore-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .ccache
+            out
+          key: build-cache-linux-${{ github.run_id }}
+          restore-keys: |
+            build-cache-linux-
+            ccache-linux-
+
+      - name: Re-Save Cache if matched
+        if: steps.restore-cache.outputs.cache-matched-key != ''
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .ccache
+            out
+          key: build-cache-linux-${{ github.run_id }}
+
+      - name: Status summary
+        run: |
+          echo "Cache matched key: ${{ steps.restore-cache.outputs.cache-matched-key }}"
+          echo "Cache refresh completed successfully."
