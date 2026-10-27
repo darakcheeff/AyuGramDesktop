@@ -128,7 +128,7 @@ void BuildShadowBan(SectionBuilder &builder) {
 	builder.addButton({
 		.id = u"ayu/shadowBanIds"_q,
 		.altIds = { u"ayu/shadowBanList"_q },
-		.title = tr::ayu_FiltersShadowBan(),
+		.title = rpl::single(QString::fromUtf8("Скрытые пользователи и боты")),
 		.st = &st::settingsButtonNoIcon,
 		.onClick = [=] {
 			controller->dialogId = std::nullopt;

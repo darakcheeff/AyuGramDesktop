@@ -45,6 +45,7 @@
 #include "styles/style_layers.h"
 #include "styles/style_menu_icons.h"
 #include "ui/boxes/confirm_box.h"
+#include "ui/toast/toast.h"
 #include "ui/widgets/popup_menu.h"
 #include "ui/widgets/menu/menu_add_action_callback_factory.h"
 #include "window/window_peer_menu.h"
@@ -464,8 +465,7 @@ void AddOpenChannelAction(PeerData *peerData,
 
 void AddShadowBanAction(PeerData *peerData,
 						const Window::PeerMenuCallback &addCallback) {
-	const auto &settings = AyuSettings::getInstance();
-	if (!peerData || !(peerData->isUser() || peerData->isBroadcast()) || !settings.filtersEnabled()) {
+	if (!peerData || !(peerData->isUser() || peerData->isBroadcast())) {
 		return;
 	}
 
@@ -479,17 +479,24 @@ void AddShadowBanAction(PeerData *peerData,
 	const auto shadowBanned = AyuSettings::getInstance().isShadowBanned(realId);
 	const auto toggleShadowBan = [=]
 	{
+		const auto name = peerData->name();
 		if (shadowBanned) {
 			AyuSettings::getInstance().removeShadowBan(realId);
+			Ui::Toast::Show(QString::fromUtf8("Сообщения %1 снова отображаются").arg(name));
 		} else {
 			AyuSettings::getInstance().addShadowBan(realId);
+			Ui::Toast::Show(QString::fromUtf8("Все сообщения %1 скрыты").arg(name));
 		}
 	};
 
+	const auto label = (peerData->isUser() && peerData->asUser()->isBot())
+		? (shadowBanned ? QString::fromUtf8("✅ Показать сообщения бота") : QString::fromUtf8("🚫 Скрыть все сообщения бота"))
+		: peerData->isBroadcast()
+		? (shadowBanned ? QString::fromUtf8("✅ Показать сообщения канала") : QString::fromUtf8("🚫 Скрыть все сообщения канала"))
+		: (shadowBanned ? QString::fromUtf8("✅ Показать сообщения автора") : QString::fromUtf8("🚫 Скрыть все сообщения автора"));
+
 	addCallback({
-		.text = (shadowBanned
-					 ? tr::ayu_FiltersQuickUnshadowBan(tr::now)
-					 : tr::ayu_FiltersQuickShadowBan(tr::now)),
+		.text = label,
 		.handler = toggleShadowBan,
 		.icon = shadowBanned ? &st::menuIconShowInChat : &st::menuIconStealth,
 	});
@@ -572,6 +579,71 @@ void AddHideMessageAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
 			history->requestChatListMessage();
 		},
 		&st::menuIconClear);
+}
+
+void AddHideUserMessagesAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
+	if (!item || !item->isHistoryEntry()) {
+		return;
+	}
+
+	const auto from = item->from();
+	const auto viaBot = item->viaBot();
+	const auto forwarded = item->Get<HistoryMessageForwarded>();
+	const auto origSender = forwarded ? forwarded->originalSender : nullptr;
+
+	auto &settings = AyuSettings::getInstance();
+
+	const auto addPeerToggleAction = [&](PeerData *peer, const QString &typeLabel) {
+		if (!peer || peer->isSelf()) {
+			return;
+		}
+		const auto realId = getDialogIdFromPeer(peer);
+		const auto isHidden = settings.isShadowBanned(realId);
+		const auto name = peer->name();
+
+		const auto text = isHidden
+			? QString::fromUtf8("✅ Показать сообщения %1 (%2)").arg(typeLabel, name)
+			: QString::fromUtf8("🚫 Скрыть все сообщения %1 (%2)").arg(typeLabel, name);
+
+		menu->addAction(
+			text,
+			[=]() {
+				auto &s = AyuSettings::getInstance();
+				if (s.isShadowBanned(realId)) {
+					s.removeShadowBan(realId);
+					Ui::Toast::Show(QString::fromUtf8("Сообщения %1 снова отображаются").arg(name));
+				} else {
+					s.addShadowBan(realId);
+					Ui::Toast::Show(QString::fromUtf8("Все сообщения %1 скрыты").arg(name));
+				}
+			},
+			isHidden ? &st::menuIconShowInChat : &st::menuIconStealth);
+	};
+
+	// 1. Author of the message
+	if (from && !from->isSelf()) {
+		const auto label = from->isBot()
+			? QString::fromUtf8("бота")
+			: from->isBroadcast()
+			? QString::fromUtf8("канала")
+			: QString::fromUtf8("автора");
+		addPeerToggleAction(from, label);
+	}
+
+	// 2. Inline bot (via @bot)
+	if (viaBot && viaBot != from && !viaBot->isSelf()) {
+		addPeerToggleAction(viaBot, QString::fromUtf8("бота"));
+	}
+
+	// 3. Original sender of forwarded message (скрытие пересылок тоже)
+	if (origSender && origSender != from && !origSender->isSelf()) {
+		const auto origLabel = origSender->isBot()
+			? QString::fromUtf8("бота (из пересылки)")
+			: origSender->isBroadcast()
+			? QString::fromUtf8("канала (из пересылки)")
+			: QString::fromUtf8("автора (из пересылки)");
+		addPeerToggleAction(origSender, origLabel);
+	}
 }
 
 void AddUserMessagesAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {

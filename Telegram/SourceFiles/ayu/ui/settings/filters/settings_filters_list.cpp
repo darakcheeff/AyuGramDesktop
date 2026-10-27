@@ -37,7 +37,7 @@ namespace Settings {
 
 rpl::producer<QString> AyuFiltersList::title() {
 	if (shadowBan) {
-		return tr::ayu_FiltersShadowBan();
+		return rpl::single(QString::fromUtf8("Скрытые пользователи и боты"));
 	}
 	if (!dialogId.has_value()) {
 		return tr::ayu_RegexFiltersShared();
@@ -280,7 +280,7 @@ void AyuFiltersList::initializeShadowBan(not_null<Ui::VerticalLayout*> container
 	if (AyuSettings::getInstance().shadowBanIds().size() > 0) {
 		AddSkip(container);
 
-		filtersTitle = AddSubsectionTitle(container, tr::ayu_RegexFiltersHeader());
+		filtersTitle = AddSubsectionTitle(container, rpl::single(QString::fromUtf8("Скрытые пользователи и боты")));
 		const auto content = container->add(std::move(list));
 
 		AddSkip(container);
@@ -289,7 +289,7 @@ void AyuFiltersList::initializeShadowBan(not_null<Ui::VerticalLayout*> container
 		delegate->setContent(content->entity());
 		ctrl->setDelegate(delegate);
 	} else {
-		Ui::AddDividerText(container, tr::ayu_RegexFiltersListEmpty());
+		Ui::AddDividerText(container, rpl::single(QString::fromUtf8("Список скрытых пользователей и ботов пуст.")));
 	}
 }
 

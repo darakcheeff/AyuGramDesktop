@@ -1867,6 +1867,7 @@ void Filler::fillContextMenuActions() {
 			addBlockUser();
 		}
 	}
+	AyuUi::AddShadowBanAction(_peer, _addAction);
 	addClearHistory();
 	AyuUi::AddDeleteOwnMessagesAction(_peer, _topic, _controller, _addAction);
 	addDeleteChat();

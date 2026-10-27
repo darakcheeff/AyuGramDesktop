@@ -1128,6 +1128,7 @@ void AddMessageActions(
 		const auto context = request.view ? request.view->context() : Context::History;
 		AyuUi::AddHistoryAction(menu, request.item);
 		AyuUi::AddHideMessageAction(menu, request.item);
+		AyuUi::AddHideUserMessagesAction(menu, request.item);
 		AyuUi::AddUserMessagesAction(menu, request.item);
 		AyuUi::AddRepeatMessageAction(menu, request.item, context);
 		AyuUi::AddMessageDetailsAction(menu, request.item);

@@ -139,11 +139,13 @@ void PerDialogFiltersListController::rowClicked(not_null<PeerListRow*> peer) {
 		_contextMenu->setAttribute(Qt::WA_DeleteOnClose);
 
 		_contextMenu->addAction(
-			tr::lng_theme_delete(tr::now),
+			QString::fromUtf8("Удалить из скрытых (показывать сообщения)"),
 			[=]
 			{
 				if (AyuSettings::getInstance().isShadowBanned(did)) {
 					AyuSettings::getInstance().removeShadowBan(did);
+					delegate()->peerListRemoveRow(row);
+					delegate()->peerListRefresh();
 				} else {
 					AyuSettings::getInstance().addShadowBan(did);
 				}
