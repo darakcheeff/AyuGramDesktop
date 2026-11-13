@@ -2,9 +2,21 @@ name: Build Custom AyuGram (Linux x86_64)
 
 on:
   workflow_dispatch:
+    inputs:
+      clean_cache:
+        description: 'Clean build (ignore existing checkpoint cache)'
+        required: false
+        default: false
+        type: boolean
+      migrate_cache_only:
+        description: 'Only migrate legacy Actions cache to GitHub Release checkpoint (skip build)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   build-linux:
@@ -24,7 +36,34 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Restore Workspace Cache
+      - name: Restore Release Checkpoint
+        if: success() && inputs.clean_cache != true && inputs.clean_cache != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eo pipefail
+          command -v zstd >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y zstd)
+          CHECKPOINT_TAG="build-cache-linux"
+          if gh release view "$CHECKPOINT_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Found release checkpoint $CHECKPOINT_TAG. Downloading cache parts..."
+            mkdir -p /tmp/checkpoint
+            gh release download "$CHECKPOINT_TAG" --repo "$GITHUB_REPOSITORY" --pattern "cache-linux-x64.tar.zst.part_*" --dir /tmp/checkpoint || true
+            if compgen -G "/tmp/checkpoint/cache-linux-x64.tar.zst.part_*" > /dev/null; then
+              echo "Extracting release checkpoint into $GITHUB_WORKSPACE..."
+              cat /tmp/checkpoint/cache-linux-x64.tar.zst.part_* | tar -I "zstd -d -T0" -xf - -C "$GITHUB_WORKSPACE"
+              rm -rf /tmp/checkpoint
+              echo "RELEASE_CACHE_RESTORED=true" >> "$GITHUB_ENV"
+              echo "Release checkpoint restored successfully."
+            else
+              rm -rf /tmp/checkpoint
+              echo "No checkpoint archive parts found in $CHECKPOINT_TAG."
+            fi
+          else
+            echo "No release checkpoint $CHECKPOINT_TAG found yet."
+          fi
+
+      - name: Fallback Restore from Legacy Actions Cache
+        if: success() && (inputs.clean_cache != true && inputs.clean_cache != 'true') && env.RELEASE_CACHE_RESTORED != 'true'
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -36,6 +75,7 @@ jobs:
             ccache-linux-
 
       - name: Restore Git Timestamps
+        if: success() && inputs.migrate_cache_only != true && inputs.migrate_cache_only != 'true'
         run: |
           python3 -c '
           import subprocess, os
@@ -58,6 +98,7 @@ jobs:
           ' || true
 
       - name: Patch Build Dependencies
+        if: success() && inputs.migrate_cache_only != true && inputs.migrate_cache_only != 'true'
         run: |
           cat << 'STUB_EOF' > cmake/external/cld3/CMakeLists.txt
           add_library(external_cld3 INTERFACE IMPORTED GLOBAL)
@@ -79,10 +120,12 @@ jobs:
           sed -i 's/PROPERTIES FOLDER "(external)"/PROPERTIES FOLDER "(external)" UNITY_BUILD OFF/' cmake/external/cmark_gfm/CMakeLists.txt
 
       - name: Pull build container
+        if: success() && inputs.migrate_cache_only != true && inputs.migrate_cache_only != 'true'
         run: |
           docker pull ghcr.io/telegramdesktop/tdesktop/centos_env:latest
 
       - name: Build AyuGram Binary
+        if: success() && inputs.migrate_cache_only != true && inputs.migrate_cache_only != 'true'
         run: |
           mkdir -p .ccache out
           docker run --rm \
@@ -110,16 +153,8 @@ jobs:
             -DTDESKTOP_DISABLE_AUTOUPDATE=ON \
             -DDESKTOP_APP_DISABLE_CRASH_REPORTS=ON
 
-      - name: Save Workspace Cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            .ccache
-            out
-          key: build-cache-linux-${{ github.run_id }}
-
       - name: Strip & Package Binary
+        if: success() && inputs.migrate_cache_only != true && inputs.migrate_cache_only != 'true'
         run: |
           cd out/Release
           strip -s AyuGram || true
@@ -127,6 +162,7 @@ jobs:
           ls -lh AyuGram-Linux-Custom.tar.xz
 
       - name: Upload Build Artifact
+        if: success() && inputs.migrate_cache_only != true && inputs.migrate_cache_only != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: AyuGram-Linux-Custom
@@ -135,6 +171,7 @@ jobs:
 
       - name: Extract Version Info
         id: version
+        if: success() && inputs.migrate_cache_only != true && inputs.migrate_cache_only != 'true'
         run: |
           VERSION=$(grep -oP 'AppVersionStr = "\K[^"]+' Telegram/SourceFiles/core/version.h || echo "7.0.9")
           BUILD_INFO=$(grep -oP 'AppBuildInfoStr = "\K[^"]+' Telegram/SourceFiles/core/version.h || echo "")
@@ -147,6 +184,7 @@ jobs:
           echo "title=AyuGram Desktop v${FULL_VERSION} (Custom Linux Edition)" >> $GITHUB_OUTPUT
 
       - name: Create / Update GitHub Release
+        if: success() && inputs.migrate_cache_only != true && inputs.migrate_cache_only != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
@@ -155,3 +193,66 @@ jobs:
           files: out/Release/AyuGram-Linux-Custom.tar.xz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Save Release Checkpoint
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eo pipefail
+          command -v zstd >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y zstd)
+          PATHS_TO_SAVE=""
+          [ -d ".ccache" ] && PATHS_TO_SAVE="$PATHS_TO_SAVE .ccache"
+          [ -d "out" ] && PATHS_TO_SAVE="$PATHS_TO_SAVE out"
+          if [ -z "$PATHS_TO_SAVE" ]; then
+            echo "Nothing to save."
+            exit 0
+          fi
+
+          PARTS_DIR="/tmp/checkpoint_out"
+          rm -rf "$PARTS_DIR"
+          mkdir -p "$PARTS_DIR"
+          echo "Archiving$PATHS_TO_SAVE into split zstd parts..."
+          tar --exclude='out/Release/AyuGram-Linux-Custom.tar.xz' -cf - $PATHS_TO_SAVE | zstd -1 -T0 | split -b 1900M -d -a 2 - "$PARTS_DIR/cache-linux-x64.tar.zst.part_"
+          ls -lh "$PARTS_DIR"
+
+          CHECKPOINT_TAG="build-cache-linux"
+          gh release view "$CHECKPOINT_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$CHECKPOINT_TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "Linux Build Cache Checkpoint" \
+              --notes "Permanent build cache checkpoint (.ccache + out) for AyuGram Desktop." \
+              --prerelease
+
+          for part in "$PARTS_DIR"/cache-linux-x64.tar.zst.part_*; do
+            [ -f "$part" ] || continue
+            uploaded=false
+            for attempt in 1 2 3; do
+              echo "Uploading $(basename "$part") (attempt $attempt of 3)..."
+              if gh release upload "$CHECKPOINT_TAG" "$part" --repo "$GITHUB_REPOSITORY" --clobber; then
+                echo "Uploaded $(basename "$part") successfully."
+                uploaded=true
+                break
+              fi
+              echo "Upload attempt $attempt failed, retrying in 10s..."
+              sleep 10
+            done
+            if [ "$uploaded" != "true" ]; then
+              echo "Failed to upload $(basename "$part") after 3 attempts."
+              rm -rf "$PARTS_DIR"
+              exit 1
+            fi
+          done
+
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$CHECKPOINT_TAG" --jq '.assets[] | "\(.id) \(.name)"' | while read -r asset_id asset_name; do
+            case "$asset_name" in
+              cache-linux-x64.tar.zst.part_*)
+                if [ ! -f "$PARTS_DIR/$asset_name" ]; then
+                  echo "Deleting stale checkpoint asset: $asset_name (id=$asset_id)"
+                  gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id" || true
+                fi
+                ;;
+            esac
+          done
+
+          rm -rf "$PARTS_DIR"
+          echo "Release checkpoint saved successfully."
